@@ -127,23 +127,23 @@ jobs:
             org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Update Azure Container Apps target
-        shell: bash
-        run: |
-          set -euo pipefail
+    #   - name: Update Azure Container Apps target
+    #     shell: bash
+    #     run: |
+    #       set -euo pipefail
 
-          if [[ "$ACA_KIND" == "app" ]]; then
-            az containerapp update \
-              --name "$ACA_NAME" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --image "$IMAGE" \
-              --revision-suffix "$REVISION_SUFFIX"
-          else
-            az containerapp job update \
-              --name "$ACA_NAME" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --image "$IMAGE"
-          fi
+    #       if [[ "$ACA_KIND" == "app" ]]; then
+    #         az containerapp update \
+    #           --name "$ACA_NAME" \
+    #           --resource-group "$AZURE_RESOURCE_GROUP" \
+    #           --image "$IMAGE" \
+    #           --revision-suffix "$REVISION_SUFFIX"
+    #       else
+    #         az containerapp job update \
+    #           --name "$ACA_NAME" \
+    #           --resource-group "$AZURE_RESOURCE_GROUP" \
+    #           --image "$IMAGE"
+    #       fi
 
       - name: Deployment summary
         shell: bash
