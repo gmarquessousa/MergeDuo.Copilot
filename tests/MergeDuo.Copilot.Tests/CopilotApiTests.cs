@@ -104,6 +104,94 @@ public sealed class CopilotApiTests
     }
 
     [Fact]
+    public async Task Month_summary_includes_ai_context_blocks_with_names_and_merge()
+    {
+        using var factory = new TestCopilotFactory();
+        using var client = factory.CreateHttpsClient();
+        factory.Repository.SeedUser("usr_primary", 1000, name: "Gabriel Marques Lima");
+        factory.Repository.SeedUser("usr_partner", 500, name: "Bruna Leite");
+        factory.Repository.SeedPartnership(new PartnershipDocument
+        {
+            Id = "pair_usr_primary_usr_partner",
+            PartnershipId = "pair_001",
+            UserId = "usr_primary",
+            PartnerUserId = "usr_partner",
+            Status = "active",
+            MergedSince = new DateOnly(2026, 1, 1)
+        });
+        factory.Repository.SeedCard(new CardDocument
+        {
+            Id = "card_main",
+            UserId = "usr_primary",
+            Title = "Nubank Gabriel",
+            ClosingDay = 28,
+            DueDay = 10,
+            Currency = "BRL"
+        });
+        factory.Repository.SeedTransaction(Tx("tx_salary", "usr_primary", "2026-05-01", AggregateCategories.Income, AggregateKinds.In, 5000));
+        factory.Repository.SeedTransaction(Tx("tx_card", "usr_primary", "2026-05-10", AggregateCategories.CreditCard, AggregateKinds.Out, 1000, "card_main"));
+        factory.Repository.SeedTransaction(Tx("tx_market", "usr_primary", "2026-05-12", AggregateCategories.VariableExpense, AggregateKinds.Out, 500));
+        factory.Repository.SeedTransaction(Tx("tx_partner_salary", "usr_partner", "2026-05-02", AggregateCategories.Income, AggregateKinds.In, 3000));
+        factory.Repository.SeedTransaction(Tx("tx_partner_rent", "usr_partner", "2026-05-05", AggregateCategories.FixedExpense, AggregateKinds.Out, 700));
+
+        var response = await client.GetAsync("/copilot/month-summary/2026/5");
+        await EnsureSuccessAsync(response);
+        var summary = (await response.Content.ReadFromJsonAsync<CopilotMonthSummaryResponse>())!;
+
+        Assert.Equal("merged", summary.Scope);
+        Assert.Contains(summary.Owners, owner => owner is { UserId: "usr_primary", Name: "Gabriel Marques Lima" });
+        Assert.Contains(summary.Owners, owner => owner is { UserId: "usr_partner", Name: "Bruna Leite" });
+
+        var card = Assert.Single(summary.CardsSummary);
+        Assert.Equal("card_main", card.CardId);
+        Assert.Equal("Nubank Gabriel", card.Title);
+        Assert.Equal("Gabriel Marques Lima", card.OwnerName);
+        Assert.Equal(1000, card.InvoiceAmount);
+        Assert.Equal(12.5m, card.PercentageOfIncome);
+
+        Assert.Contains(summary.CategoriesSummary, category =>
+            category.Category == AggregateCategories.CreditCard &&
+            category.Label == "Cartão de crédito" &&
+            category.Amount == 1000m &&
+            category.ConfirmedAmount == 1000m);
+        Assert.Contains(summary.OwnersSummary, owner =>
+            owner.UserId == "usr_partner" &&
+            owner.Name == "Bruna Leite" &&
+            owner.FixedExpenses == 700m);
+        Assert.Equal(27.5m, summary.FinancialRatios.ExpenseToIncomeRatio);
+        Assert.Equal(31, summary.DailyCashflow.Count);
+        Assert.All(Enumerable.Range(1, 31), day => Assert.Contains(summary.DailyCashflow, item => item.Day == day));
+        Assert.False(string.IsNullOrWhiteSpace(summary.AiContextText));
+        Assert.Contains("Gabriel Marques Lima", summary.AiContextText);
+        Assert.Contains("Nubank Gabriel", summary.AiContextText);
+        Assert.False(summary.Comparison.Available);
+        Assert.Contains(summary.RelevantMovements, movement =>
+            movement.CardId == "card_main" &&
+            movement.CardTitle == "Nubank Gabriel" &&
+            movement.OwnerName == "Gabriel Marques Lima" &&
+            movement.CategoryLabel == "Cartão de crédito");
+        Assert.Equal(0, factory.Repository.MutationCount);
+    }
+
+    [Fact]
+    public async Task Month_summary_financial_ratios_return_null_when_income_is_zero()
+    {
+        using var factory = new TestCopilotFactory();
+        using var client = factory.CreateHttpsClient();
+        factory.Repository.SeedUser("usr_primary", 1000, name: "Gabriel Marques Lima");
+        factory.Repository.SeedTransaction(Tx("tx_market", "usr_primary", "2026-05-10", AggregateCategories.VariableExpense, AggregateKinds.Out, 300));
+
+        var response = await client.GetAsync("/copilot/month-summary/2026/5");
+        await EnsureSuccessAsync(response);
+        var summary = (await response.Content.ReadFromJsonAsync<CopilotMonthSummaryResponse>())!;
+
+        Assert.Null(summary.FinancialRatios.ExpenseToIncomeRatio);
+        Assert.Null(summary.CategoriesSummary.Single(x => x.Category == AggregateCategories.VariableExpense).PercentageOfIncome);
+        Assert.Null(summary.ConfirmedVsProjected.ProjectedIncomePercentage);
+        Assert.False(string.IsNullOrWhiteSpace(summary.AiContextText));
+    }
+
+    [Fact]
     public async Task Next_three_months_returns_requested_month_plus_two_following_months()
     {
         using var factory = new TestCopilotFactory();
@@ -367,7 +455,8 @@ public sealed class CopilotApiTests
         string date,
         string category,
         string kind,
-        decimal amount)
+        decimal amount,
+        string? cardId = null)
     {
         var parsed = DateOnly.Parse(date);
         return new TransactionProjection
@@ -381,6 +470,7 @@ public sealed class CopilotApiTests
             Kind = kind,
             Amount = amount,
             Currency = "BRL",
+            CardId = cardId,
             UpdatedAt = DateTimeOffset.Parse("2026-05-21T15:00:00Z")
         };
     }

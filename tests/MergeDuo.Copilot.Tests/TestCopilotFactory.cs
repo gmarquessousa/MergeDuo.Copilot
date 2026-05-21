@@ -27,6 +27,7 @@ public sealed class TestCopilotFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("Copilot__SourceVersion", "4");
         Environment.SetEnvironmentVariable("Copilot__ProjectionMonths", "3");
         Environment.SetEnvironmentVariable("Copilot__MaxSimulationInstallments", "24");
+        Environment.SetEnvironmentVariable("Copilot__SafetyMarginValue", "500");
         Environment.SetEnvironmentVariable("Cosmos__Endpoint", "https://cosmos.test/");
         Environment.SetEnvironmentVariable("Cosmos__Database", "mergeduo");
     }
@@ -43,6 +44,7 @@ public sealed class TestCopilotFactory : WebApplicationFactory<Program>
                 ["Copilot:SourceVersion"] = "4",
                 ["Copilot:ProjectionMonths"] = "3",
                 ["Copilot:MaxSimulationInstallments"] = "24",
+                ["Copilot:SafetyMarginValue"] = "500",
                 ["Cosmos:Endpoint"] = "https://cosmos.test/",
                 ["Cosmos:Database"] = "mergeduo",
                 ["Cosmos:UsersContainer"] = "users",

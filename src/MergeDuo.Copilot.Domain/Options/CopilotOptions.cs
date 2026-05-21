@@ -7,6 +7,7 @@ public sealed class CopilotOptions
     public int SourceVersion { get; set; } = 4;
     public int ProjectionMonths { get; set; } = 3;
     public int MaxSimulationInstallments { get; set; } = 48;
+    public decimal SafetyMarginValue { get; set; } = 500m;
 }
 
 public sealed class CosmosOptions

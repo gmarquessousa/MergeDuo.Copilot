@@ -77,6 +77,12 @@ Cosmos__FixedRulesContainer=fixedRules
 Cosmos__CardsContainer=cards
 ```
 
+Opcionais:
+
+```text
+Copilot__SafetyMarginValue=500
+```
+
 Escolha uma forma de conexao com Cosmos:
 
 ```text
@@ -119,6 +125,7 @@ Na raiz do repositorio `MergeDuo.Copilot`:
 $env:ASPNETCORE_ENVIRONMENT="Development"
 $env:Copilot__UserId="usr_xxx"
 $env:Copilot__BusinessTimeZone="America/Sao_Paulo"
+$env:Copilot__SafetyMarginValue="500"
 $env:Cosmos__ConnectionString="AccountEndpoint=...;AccountKey=...;"
 $env:Cosmos__Database="mergeduo"
 $env:Cosmos__UsersContainer="users"
@@ -201,11 +208,26 @@ Resposta inclui:
 - `period`
 - `totals`
 - `byCategory`
-- `byCard`
-- `relevantMovements`
+- `byCard` como mapa legado por id do cartao
+- `cardsSummary` com nome do cartao, responsavel, vencimento, valor e percentuais
+- `categoriesSummary` com labels, percentuais, confirmado/projetado e principais movimentos
+- `ownersSummary` com resumo por responsavel
+- `financialRatios`
+- `confirmedVsProjected`
+- `dailyCashflow`
+- `cashflowMetrics`
+- `commitmentCalendar`
+- `highlights`
+- `comparison`
+- `threeMonthAverage`
+- `againstThreeMonthAverage`
+- `relevantMovements` enriquecido com `ownerName`, `cardTitle`, `categoryLabel` e `kindLabel`
 - `dataFreshness`
 - `computedAt`
 - `summaryText`
+- `aiContextText`
+
+O endpoint retorna dados objetivos e contexto factual para IA. Ele nao retorna recomendacao, julgamento de risco ou decisao financeira.
 
 ### GET /copilot/next-three-months
 
@@ -441,6 +463,7 @@ No ACA, configure:
 ASPNETCORE_ENVIRONMENT=Production
 Copilot__UserId=usr_xxx
 Copilot__BusinessTimeZone=America/Sao_Paulo
+Copilot__SafetyMarginValue=500
 Cosmos__Database=mergeduo
 Cosmos__UsersContainer=users
 Cosmos__PartnershipsContainer=partnerships
@@ -469,6 +492,7 @@ az containerapp update \
     ASPNETCORE_ENVIRONMENT=Production \
     Copilot__UserId=usr_xxx \
     Copilot__BusinessTimeZone=America/Sao_Paulo \
+    Copilot__SafetyMarginValue=500 \
     Cosmos__ConnectionString=secretref:cosmos-connection-string \
     Cosmos__Database=mergeduo \
     Cosmos__UsersContainer=users \
@@ -509,6 +533,7 @@ docker run --rm -p 5088:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
   -e Copilot__UserId=usr_xxx \
   -e Copilot__BusinessTimeZone=America/Sao_Paulo \
+  -e Copilot__SafetyMarginValue=500 \
   -e Cosmos__ConnectionString="AccountEndpoint=...;AccountKey=...;" \
   -e Cosmos__Database=mergeduo \
   -e Cosmos__UsersContainer=users \
