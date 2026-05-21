@@ -1,0 +1,39 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+**/publish/
+**/TestResults/
+**/coverage/
+**/coverage.*
+**/*.trx
+**/*.coverage
+**/*.coveragexml
+
+# IDE / user-specific files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs / temp files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.pid
+
+# Local secrets and certificates
+secrets.json
+*.pfx
+*.pem
+*.key
+*.p12
+
+# OS metadata
+.DS_Store
+Thumbs.db

@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{863F8A50-A0B9-46D2-B77C-4AC88AD66048}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MergeDuo.Copilot.Domain", "src\MergeDuo.Copilot.Domain\MergeDuo.Copilot.Domain.csproj", "{72B03817-0101-4079-B534-98E3E2643915}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MergeDuo.Copilot.Infra", "src\MergeDuo.Copilot.Infra\MergeDuo.Copilot.Infra.csproj", "{0E2FA963-5DD8-43F6-9F1E-F05B8492680A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MergeDuo.Copilot.Api", "src\MergeDuo.Copilot.Api\MergeDuo.Copilot.Api.csproj", "{74AA329C-9B71-49A8-8B59-83F692FC7E6D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{CF9F312E-D062-487F-8737-878B305D8FA0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MergeDuo.Copilot.Tests", "tests\MergeDuo.Copilot.Tests\MergeDuo.Copilot.Tests.csproj", "{6A11E3B9-3B12-40CA-A335-2D743A9414FA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{72B03817-0101-4079-B534-98E3E2643915}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72B03817-0101-4079-B534-98E3E2643915}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72B03817-0101-4079-B534-98E3E2643915}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72B03817-0101-4079-B534-98E3E2643915}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0E2FA963-5DD8-43F6-9F1E-F05B8492680A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0E2FA963-5DD8-43F6-9F1E-F05B8492680A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E2FA963-5DD8-43F6-9F1E-F05B8492680A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0E2FA963-5DD8-43F6-9F1E-F05B8492680A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74AA329C-9B71-49A8-8B59-83F692FC7E6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74AA329C-9B71-49A8-8B59-83F692FC7E6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74AA329C-9B71-49A8-8B59-83F692FC7E6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74AA329C-9B71-49A8-8B59-83F692FC7E6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A11E3B9-3B12-40CA-A335-2D743A9414FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A11E3B9-3B12-40CA-A335-2D743A9414FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A11E3B9-3B12-40CA-A335-2D743A9414FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A11E3B9-3B12-40CA-A335-2D743A9414FA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{72B03817-0101-4079-B534-98E3E2643915} = {863F8A50-A0B9-46D2-B77C-4AC88AD66048}
+		{0E2FA963-5DD8-43F6-9F1E-F05B8492680A} = {863F8A50-A0B9-46D2-B77C-4AC88AD66048}
+		{74AA329C-9B71-49A8-8B59-83F692FC7E6D} = {863F8A50-A0B9-46D2-B77C-4AC88AD66048}
+		{6A11E3B9-3B12-40CA-A335-2D743A9414FA} = {CF9F312E-D062-487F-8737-878B305D8FA0}
+	EndGlobalSection
+EndGlobal

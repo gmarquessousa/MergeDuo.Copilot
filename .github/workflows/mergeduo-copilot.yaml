@@ -1,0 +1,161 @@
+# GitHub Actions workflow for one MergeDuo microservice repository.
+#
+# Required GitHub environment variables in the environment named "environment":
+# - ACR_NAME
+# - ACR_LOGIN_SERVER
+# - AZURE_RESOURCE_GROUP
+# - ACA_NAME
+# - IMAGE_REPOSITORY
+# - DOCKERFILE
+#
+# Optional GitHub environment variables:
+# - ACA_KIND (defaults to app; supported values: app, job)
+# - DOCKER_CONTEXT (defaults to .)
+#
+# Required GitHub secrets (repository or environment):
+# - AZURE_CLIENT_ID
+# - AZURE_TENANT_ID
+# - AZURE_SUBSCRIPTION_ID
+
+name: Build and deploy MergeDuo Aggregates
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: mergeduo-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build, push and deploy
+    runs-on: ubuntu-latest
+    environment: environment
+    env:
+      ACA_KIND: ${{ vars.ACA_KIND || 'app' }}
+      ACA_NAME: ${{ vars.ACA_NAME }}
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      DOCKER_BUILD_CONTEXT: ${{ vars.DOCKER_CONTEXT || '.' }}
+      DOCKERFILE: ${{ vars.DOCKERFILE }}
+      IMAGE_REPOSITORY: ${{ vars.IMAGE_REPOSITORY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment variables and paths
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=()
+
+          for variable in ACR_NAME ACR_LOGIN_SERVER AZURE_RESOURCE_GROUP ACA_NAME IMAGE_REPOSITORY DOCKERFILE; do
+            if [[ -z "${!variable:-}" ]]; then
+              missing+=("$variable")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing GitHub environment variable(s) in environment '\''environment'\'': %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+          if [[ "$ACA_KIND" != "app" && "$ACA_KIND" != "job" ]]; then
+            echo "::error::ACA_KIND must be 'app' or 'job'. Current value: $ACA_KIND"
+            exit 1
+          fi
+
+          if [[ ! -d "$DOCKER_BUILD_CONTEXT" ]]; then
+            echo "::error::Docker context does not exist: $DOCKER_BUILD_CONTEXT"
+            exit 1
+          fi
+
+          if [[ ! -f "$DOCKERFILE" ]]; then
+            echo "::error::Dockerfile does not exist: $DOCKERFILE"
+            exit 1
+          fi
+
+      - name: Compute deployment metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "IMAGE=$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "REVISION_SUFFIX=${GITHUB_SHA::12}-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure Container Apps CLI support
+        shell: bash
+        run: |
+          set -euo pipefail
+          az extension add --name containerapp --upgrade --only-show-errors || true
+
+      - name: Login to ACR
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr login --name "$ACR_NAME"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: "v0.23.0"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.DOCKER_BUILD_CONTEXT }}
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          tags: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Update Azure Container Apps target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$ACA_KIND" == "app" ]]; then
+            az containerapp update \
+              --name "$ACA_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --image "$IMAGE" \
+              --revision-suffix "$REVISION_SUFFIX"
+          else
+            az containerapp job update \
+              --name "$ACA_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --image "$IMAGE"
+          fi
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "### MergeDuo deploy"
+            echo ""
+            echo "- Kind: \`$ACA_KIND\`"
+            echo "- Target: \`$ACA_NAME\`"
+            echo "- Resource group: \`$AZURE_RESOURCE_GROUP\`"
+            echo "- Image: \`$IMAGE\`"
+            echo "- Docker context: \`$DOCKER_BUILD_CONTEXT\`"
+            echo "- Dockerfile: \`$DOCKERFILE\`"
+          } >> "$GITHUB_STEP_SUMMARY"
