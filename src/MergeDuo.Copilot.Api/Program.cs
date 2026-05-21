@@ -125,6 +125,16 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 app.UseCors();
 app.UseRateLimiter();
 
+app.MapGet("/", () => Results.Ok(new
+{
+    service = "mergeduo-copilot",
+    status = "ok"
+}))
+.ExcludeFromDescription();
+
+app.MapGet("/startupz", () => Results.Ok(new { status = "started" }))
+    .ExcludeFromDescription();
+
 app.MapHealthChecks("/healthz");
 app.MapGet("/readyz", async (ICopilotReadinessProbe readiness, CancellationToken cancellationToken) =>
 {

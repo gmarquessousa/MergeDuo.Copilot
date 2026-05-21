@@ -10,6 +10,17 @@ namespace MergeDuo.Copilot.Tests;
 public sealed class CopilotApiTests
 {
     [Fact]
+    public async Task Startup_and_health_endpoints_return_success_without_authorization_or_cosmos_data()
+    {
+        using var factory = new TestCopilotFactory();
+        using var client = factory.CreateHttpsClient();
+
+        await EnsureSuccessAsync(await client.GetAsync("/"));
+        await EnsureSuccessAsync(await client.GetAsync("/startupz"));
+        await EnsureSuccessAsync(await client.GetAsync("/healthz"));
+    }
+
+    [Fact]
     public async Task Month_summary_returns_stored_single_user_without_authorization()
     {
         using var factory = new TestCopilotFactory();

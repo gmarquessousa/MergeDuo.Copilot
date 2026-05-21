@@ -134,11 +134,13 @@ dotnet run --project .\src\MergeDuo.Copilot.Api --urls "http://localhost:5088"
 Health checks:
 
 ```powershell
+Invoke-RestMethod http://localhost:5088/
+Invoke-RestMethod http://localhost:5088/startupz
 Invoke-RestMethod http://localhost:5088/healthz
 Invoke-RestMethod http://localhost:5088/readyz
 ```
 
-`healthz` valida se o processo esta rodando. `readyz` valida configuracao, Cosmos e existencia do usuario configurado em `Copilot__UserId`.
+`/` e `startupz` sao endpoints baratos para startup probe e nao acessam Cosmos. `healthz` valida se o processo esta rodando. `readyz` valida configuracao, containers Cosmos e existencia do usuario configurado em `Copilot__UserId`.
 
 ## Testar com tunel
 
@@ -159,6 +161,7 @@ https://abc123.ngrok-free.app
 Use:
 
 ```text
+https://abc123.ngrok-free.app/startupz
 https://abc123.ngrok-free.app/healthz
 https://abc123.ngrok-free.app/readyz
 https://abc123.ngrok-free.app/swagger/v1/swagger.json
@@ -394,6 +397,38 @@ A imagem escuta em:
 
 Configure o ingress target port do ACA como `8080`.
 
+### Probes no ACA
+
+Use probes que separam startup, liveness e readiness:
+
+```text
+Startup probe
+Type: HTTP GET
+Path: /startupz
+Port: 8080
+
+Liveness probe
+Type: HTTP GET
+Path: /healthz
+Port: 8080
+
+Readiness probe
+Type: HTTP GET
+Path: /readyz
+Port: 8080
+```
+
+Nao use `/readyz` como startup probe. O `/readyz` acessa Cosmos e valida o usuario fixo; se Cosmos, firewall, secret ou `Copilot__UserId` ainda estiverem incorretos, o ACA pode reiniciar a revision antes de voce conseguir diagnosticar a aplicacao.
+
+Se estiver configurando pelo portal:
+
+- `Ingress > Target port`: `8080`
+- `Containers > Health probes > Startup`: `HTTP`, path `/startupz`, port `8080`
+- `Containers > Health probes > Liveness`: `HTTP`, path `/healthz`, port `8080`
+- `Containers > Health probes > Readiness`: `HTTP`, path `/readyz`, port `8080`
+
+Se a revision estiver em loop durante o primeiro deploy, remova temporariamente a readiness probe ou mantenha apenas startup/liveness ate validar as variaveis de ambiente e o acesso ao Cosmos.
+
 ### Variaveis de ambiente no ACA
 
 No Azure Container Apps, nao use `$env:`. Essa sintaxe e apenas para PowerShell local.
@@ -449,6 +484,7 @@ Toda alteracao de environment variables cria ou exige uma nova revision.
 Depois do deploy:
 
 ```bash
+curl https://<APP_URL>/startupz
 curl https://<APP_URL>/healthz
 curl https://<APP_URL>/readyz
 curl https://<APP_URL>/copilot/month-summary/2026/5
@@ -546,6 +582,27 @@ Coberturas principais:
 - Swagger com operationIds esperados
 
 ## Troubleshooting
+
+### ACA mostra `Probe of StartUp failed with status code: 1`
+
+Isso normalmente indica que o Azure Container Apps nao conseguiu validar a startup probe e reiniciou a revision. Confira:
+
+- O ingress target port deve ser `8080`.
+- A startup probe deve ser `HTTP GET /startupz` na porta `8080`.
+- A liveness probe deve ser `HTTP GET /healthz` na porta `8080`.
+- Nao use `/readyz` como startup probe.
+- Se houver uma startup probe do tipo comando/exec, remova ou troque por HTTP GET.
+
+O stream de eventos do ACA mostra falhas de infraestrutura/probe. Para ver o erro real do .NET, use o console log stream:
+
+```bash
+az containerapp logs show \
+  -n <ACA_NAME> \
+  -g <RESOURCE_GROUP> \
+  --follow
+```
+
+Depois de corrigir probes ou environment variables, crie uma nova revision.
 
 ### `readyz` retorna `missing_copilot_user_id`
 
