@@ -42,9 +42,8 @@ dotnet test MergeDuo.Copilot.sln
 
 ## Docker
 
-O contexto do build deve ser `MergeDuo.Microservices/`, pois este projeto referencia
-`MergeDuo.Aggregates.Domain`.
+O contexto do build deve ser a raiz do repositorio `MergeDuo.Copilot`.
 
 ```bash
-docker build -f MergeDuo.Copilot/src/MergeDuo.Copilot.Api/Dockerfile -t mergeduo-copilot:local .
+docker build -f src/MergeDuo.Copilot.Api/Dockerfile -t mergeduo-copilot:local .
 ```

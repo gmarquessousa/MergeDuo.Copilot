@@ -14,3 +14,6 @@ public sealed class CopilotDependencyException(string code, string message, Exce
 {
     public Exception? InnerDependencyException { get; } = innerException;
 }
+
+public sealed class InvalidTransactionProjectionException(string message)
+    : CopilotException("invalid_transaction_projection", message);

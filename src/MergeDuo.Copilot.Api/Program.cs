@@ -1,7 +1,5 @@
 using System.Threading.RateLimiting;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
-using MergeDuo.Aggregates.Domain.Exceptions;
-using MergeDuo.Aggregates.Domain.Services;
 using MergeDuo.Copilot.Api;
 using MergeDuo.Copilot.Domain.Abstractions;
 using MergeDuo.Copilot.Domain.Contracts;
@@ -27,28 +25,18 @@ var copilotOptions = Bind<CopilotOptions>("Copilot");
 var cosmosOptions = Bind<MergeDuo.Copilot.Domain.Options.CosmosOptions>("Cosmos");
 var corsOptions = Bind<MergeDuo.Copilot.Domain.Options.CorsOptions>("Cors");
 var rateLimitOptions = Bind<MergeDuo.Copilot.Domain.Options.RateLimitOptions>("RateLimit");
-var aggregateOptions = new MergeDuo.Aggregates.Domain.Options.AggregatesOptions
-{
-    SourceVersion = copilotOptions.SourceVersion,
-    BusinessTimeZone = copilotOptions.BusinessTimeZone,
-    ProjectionMonthsAhead = copilotOptions.ProjectionMonths,
-    StaleAfterMinutes = 180,
-    DependencyTimeoutSeconds = 8,
-    MaxRebuildMonthsPerChange = 36
-};
 
 builder.Services.AddSingleton(copilotOptions);
 builder.Services.AddSingleton(cosmosOptions);
 builder.Services.AddSingleton(corsOptions);
 builder.Services.AddSingleton(rateLimitOptions);
-builder.Services.AddSingleton(aggregateOptions);
 
 builder.Services.AddSingleton<CosmosClient>(sp => CosmosClientFactory.Create(sp.GetRequiredService<MergeDuo.Copilot.Domain.Options.CosmosOptions>()));
 builder.Services.AddSingleton<CopilotCosmosRepository>();
 builder.Services.AddSingleton<ICopilotReadRepository>(sp => sp.GetRequiredService<CopilotCosmosRepository>());
 builder.Services.AddSingleton<ICopilotReadinessProbe>(sp => sp.GetRequiredService<CopilotCosmosRepository>());
-builder.Services.AddSingleton<MergeDuo.Aggregates.Domain.Abstractions.IFixedRulesProjectionRepository>(sp => sp.GetRequiredService<CopilotCosmosRepository>());
-builder.Services.AddSingleton<MergeDuo.Aggregates.Domain.Abstractions.ICardsProjectionRepository>(sp => sp.GetRequiredService<CopilotCosmosRepository>());
+builder.Services.AddSingleton<IFixedRulesProjectionRepository>(sp => sp.GetRequiredService<CopilotCosmosRepository>());
+builder.Services.AddSingleton<ICardsProjectionRepository>(sp => sp.GetRequiredService<CopilotCosmosRepository>());
 builder.Services.AddSingleton<AggregateCalculator>();
 builder.Services.AddSingleton<FixedRuleProjectionService>();
 builder.Services.AddSingleton<ICopilotFinanceService, CopilotFinanceService>();
@@ -118,7 +106,6 @@ app.UseExceptionHandler(errorApp =>
             CopilotBadRequestException ex => (StatusCodes.Status400BadRequest, ex.Code, ex.Message),
             CopilotConfigurationException ex => (StatusCodes.Status503ServiceUnavailable, ex.Code, ex.Message),
             CopilotDependencyException ex => (StatusCodes.Status503ServiceUnavailable, ex.Code, ex.Message),
-            AggregatesBadRequestException ex => (StatusCodes.Status400BadRequest, ex.Code, ex.Message),
             InvalidTransactionProjectionException ex => (StatusCodes.Status422UnprocessableEntity, ex.Code, ex.Message),
             BadHttpRequestException => (StatusCodes.Status400BadRequest, "invalid_request", "Invalid request."),
             ArgumentException => (StatusCodes.Status400BadRequest, "invalid_request", "Invalid request."),

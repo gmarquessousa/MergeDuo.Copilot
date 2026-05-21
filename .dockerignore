@@ -1,0 +1,34 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+**/publish/
+**/TestResults/
+
+# IDE / VCS
+**/.vs/
+**/.vscode/
+**/.idea/
+**/.git/
+**/.gitignore
+**/.gitattributes
+**/*.user
+**/*.suo
+
+# Tests are not needed for the runtime image
+tests/
+
+# Project notes / docs
+README.md
+**/*.md
+
+# Local-only configuration
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/secrets.json
+**/.env
+**/.env.*
+**/*.pfx
+**/*.pem
+**/*.key
+**/*.p12

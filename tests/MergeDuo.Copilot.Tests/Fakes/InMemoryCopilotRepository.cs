@@ -1,8 +1,7 @@
-using MergeDuo.Aggregates.Domain.Abstractions;
-using MergeDuo.Aggregates.Domain.Documents;
-using MergeDuo.Aggregates.Domain.Rules;
-using MergeDuo.Aggregates.Domain.Services;
 using MergeDuo.Copilot.Domain.Abstractions;
+using MergeDuo.Copilot.Domain.Documents;
+using MergeDuo.Copilot.Domain.Rules;
+using MergeDuo.Copilot.Domain.Services;
 
 namespace MergeDuo.Copilot.Tests.Fakes;
 

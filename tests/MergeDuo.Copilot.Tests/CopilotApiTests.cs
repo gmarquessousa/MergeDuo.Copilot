@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MergeDuo.Aggregates.Domain.Documents;
-using MergeDuo.Aggregates.Domain.Rules;
 using MergeDuo.Copilot.Domain.Contracts;
+using MergeDuo.Copilot.Domain.Documents;
+using MergeDuo.Copilot.Domain.Rules;
 
 namespace MergeDuo.Copilot.Tests;
 

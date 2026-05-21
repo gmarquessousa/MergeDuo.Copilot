@@ -1,11 +1,10 @@
 using System.Globalization;
 using System.Net;
-using MergeDuo.Aggregates.Domain.Abstractions;
-using MergeDuo.Aggregates.Domain.Documents;
-using MergeDuo.Aggregates.Domain.Rules;
 using MergeDuo.Copilot.Domain.Abstractions;
+using MergeDuo.Copilot.Domain.Documents;
 using MergeDuo.Copilot.Domain.Exceptions;
 using MergeDuo.Copilot.Domain.Options;
+using MergeDuo.Copilot.Domain.Rules;
 using Microsoft.Azure.Cosmos;
 
 namespace MergeDuo.Copilot.Infra.Cosmos;

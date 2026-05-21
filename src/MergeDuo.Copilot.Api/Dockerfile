@@ -1,22 +1,18 @@
 # syntax=docker/dockerfile:1.7
-# Build context MUST be MergeDuo.Microservices/ because this service references MergeDuo.Aggregates.Domain.
-# Example:
-#   docker build -f MergeDuo.Copilot/src/MergeDuo.Copilot.Api/Dockerfile -t mergeduo-copilot:local .
+# Build context MUST be the MergeDuo.Copilot repository root.
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS build
 WORKDIR /src
 
-COPY MergeDuo.Copilot/src/MergeDuo.Copilot.Api/MergeDuo.Copilot.Api.csproj          MergeDuo.Copilot/src/MergeDuo.Copilot.Api/
-COPY MergeDuo.Copilot/src/MergeDuo.Copilot.Domain/MergeDuo.Copilot.Domain.csproj    MergeDuo.Copilot/src/MergeDuo.Copilot.Domain/
-COPY MergeDuo.Copilot/src/MergeDuo.Copilot.Infra/MergeDuo.Copilot.Infra.csproj      MergeDuo.Copilot/src/MergeDuo.Copilot.Infra/
-COPY MergeDuo.Aggregates/src/MergeDuo.Aggregates.Domain/MergeDuo.Aggregates.Domain.csproj MergeDuo.Aggregates/src/MergeDuo.Aggregates.Domain/
+COPY src/MergeDuo.Copilot.Api/MergeDuo.Copilot.Api.csproj       src/MergeDuo.Copilot.Api/
+COPY src/MergeDuo.Copilot.Domain/MergeDuo.Copilot.Domain.csproj src/MergeDuo.Copilot.Domain/
+COPY src/MergeDuo.Copilot.Infra/MergeDuo.Copilot.Infra.csproj   src/MergeDuo.Copilot.Infra/
 
-RUN dotnet restore MergeDuo.Copilot/src/MergeDuo.Copilot.Api/MergeDuo.Copilot.Api.csproj
+RUN dotnet restore src/MergeDuo.Copilot.Api/MergeDuo.Copilot.Api.csproj
 
-COPY MergeDuo.Copilot/src/ MergeDuo.Copilot/src/
-COPY MergeDuo.Aggregates/src/MergeDuo.Aggregates.Domain/ MergeDuo.Aggregates/src/MergeDuo.Aggregates.Domain/
+COPY src/ src/
 
-RUN dotnet publish MergeDuo.Copilot/src/MergeDuo.Copilot.Api/MergeDuo.Copilot.Api.csproj \
+RUN dotnet publish src/MergeDuo.Copilot.Api/MergeDuo.Copilot.Api.csproj \
         -c Release \
         -o /app/publish \
         --no-restore \

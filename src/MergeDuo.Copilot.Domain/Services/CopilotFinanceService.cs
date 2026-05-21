@@ -1,12 +1,10 @@
 using System.Globalization;
-using MergeDuo.Aggregates.Domain.Contracts;
-using MergeDuo.Aggregates.Domain.Documents;
-using MergeDuo.Aggregates.Domain.Rules;
-using MergeDuo.Aggregates.Domain.Services;
 using MergeDuo.Copilot.Domain.Abstractions;
 using MergeDuo.Copilot.Domain.Contracts;
+using MergeDuo.Copilot.Domain.Documents;
 using MergeDuo.Copilot.Domain.Exceptions;
 using MergeDuo.Copilot.Domain.Options;
+using MergeDuo.Copilot.Domain.Rules;
 
 namespace MergeDuo.Copilot.Domain.Services;
 

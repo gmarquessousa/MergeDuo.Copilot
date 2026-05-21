@@ -1,4 +1,3 @@
-using MergeDuo.Aggregates.Domain.Abstractions;
 using MergeDuo.Copilot.Domain.Abstractions;
 using MergeDuo.Copilot.Infra.Cosmos;
 using MergeDuo.Copilot.Tests.Fakes;
