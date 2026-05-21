@@ -160,8 +160,8 @@ public sealed class CopilotApiTests
     {
         using var factory = new TestCopilotFactory();
         using var client = factory.CreateHttpsClient();
-        factory.Repository.SeedUser("usr_primary");
-        factory.Repository.SeedUser("usr_partner");
+        factory.Repository.SeedUser("usr_primary", name: "Gavriel");
+        factory.Repository.SeedUser("usr_partner", name: "Parceira");
         factory.Repository.SeedPartnership(new PartnershipDocument
         {
             Id = "pair_usr_primary_usr_partner",
@@ -200,11 +200,13 @@ public sealed class CopilotApiTests
         Assert.Equal("Nubank", cards.Cards[0].Title);
         Assert.Equal("usr_primary", cards.Cards[0].OwnerUserId);
         Assert.Equal("primary", cards.Cards[0].OwnerRole);
+        Assert.Equal("Gavriel", cards.Cards[0].OwnerName);
         Assert.Equal(10, cards.Cards[0].DueDay);
         Assert.Equal(new DateOnly(2026, 6, 10), cards.Cards[0].NextDueDate);
         Assert.Equal("card_partner", cards.Cards[1].Id);
         Assert.Equal("usr_partner", cards.Cards[1].OwnerUserId);
         Assert.Equal("partner", cards.Cards[1].OwnerRole);
+        Assert.Equal("Parceira", cards.Cards[1].OwnerName);
         Assert.Equal(new DateOnly(2026, 5, 25), cards.Cards[1].NextDueDate);
         Assert.Contains("2 cartao", cards.SummaryText);
     }

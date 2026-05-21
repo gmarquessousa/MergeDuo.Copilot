@@ -235,6 +235,12 @@ public sealed class UserDocument
     [JsonPropertyName("docType")]
     public string DocType { get; set; } = "user";
 
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("handle")]
+    public string Handle { get; set; } = "";
+
     [JsonPropertyName("financial")]
     public UserFinancialDocument Financial { get; set; } = new();
 

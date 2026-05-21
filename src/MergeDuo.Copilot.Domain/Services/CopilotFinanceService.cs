@@ -211,6 +211,7 @@ public sealed class CopilotFinanceService(
                 string.IsNullOrWhiteSpace(card.Title) ? card.Id : card.Title,
                 owner.UserId,
                 owner.Role,
+                OwnerName(owners, owner.UserId),
                 card.ClosingDay,
                 card.DueDay,
                 NextDueDate(card.DueDay, businessDate),
@@ -413,17 +414,24 @@ public sealed class CopilotFinanceService(
         {
             new(configuredUserId, "primary")
         };
+        var names = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [configuredUserId] = DisplayName(user, configuredUserId)
+        };
 
         var partnership = await repository.GetActivePartnerAsync(configuredUserId, cancellationToken);
         if (partnership is { Status: "active" } && UserIdRules.IsValid(partnership.PartnerUserId))
         {
+            var partner = await repository.GetUserAsync(partnership.PartnerUserId, cancellationToken);
             owners.Add(new CopilotOwnerResponse(partnership.PartnerUserId, "partner"));
+            names[partnership.PartnerUserId] = DisplayName(partner, partnership.PartnerUserId);
         }
 
         return new OwnerSet(
             owners.Count > 1 ? "merged" : "single",
             configuredUserId,
-            owners);
+            owners,
+            names);
     }
 
     private static CopilotTotalsResponse SumTotals(IReadOnlyList<OwnerMonthData> months)
@@ -592,6 +600,21 @@ public sealed class CopilotFinanceService(
         return DateWithMonthFallback(nextMonth.Year, nextMonth.Month, dueDay);
     }
 
+    private static string OwnerName(OwnerSet owners, string userId) =>
+        owners.Names.TryGetValue(userId, out var name) ? name : userId;
+
+    private static string DisplayName(UserDocument? user, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(user?.Name))
+        {
+            return user.Name.Trim();
+        }
+
+        return !string.IsNullOrWhiteSpace(user?.Handle)
+            ? user.Handle.Trim()
+            : fallback;
+    }
+
     private static string Money(decimal value) => value.ToString("C", PtBr);
 
     private static string MonthSummaryText(CopilotMonthSummaryResponse response)
@@ -629,7 +652,8 @@ public sealed class CopilotFinanceService(
     private sealed record OwnerSet(
         string Scope,
         string PrimaryUserId,
-        IReadOnlyList<CopilotOwnerResponse> Responses);
+        IReadOnlyList<CopilotOwnerResponse> Responses,
+        IReadOnlyDictionary<string, string> Names);
 
     private sealed record OwnerMonthData(
         MonthlyAggregateResponse Response,

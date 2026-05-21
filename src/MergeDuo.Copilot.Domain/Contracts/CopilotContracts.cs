@@ -73,6 +73,7 @@ public sealed record CopilotCardResponse(
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("ownerUserId")] string OwnerUserId,
     [property: JsonPropertyName("ownerRole")] string OwnerRole,
+    [property: JsonPropertyName("ownerName")] string OwnerName,
     [property: JsonPropertyName("closingDay")] int ClosingDay,
     [property: JsonPropertyName("dueDay")] int DueDay,
     [property: JsonPropertyName("nextDueDate")] DateOnly NextDueDate,

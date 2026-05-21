@@ -17,7 +17,7 @@ public sealed class InMemoryCopilotRepository(string configuredUserId) : ICopilo
 
     public int MutationCount { get; private set; }
 
-    public void SeedUser(string userId, decimal startingBalance = 0m)
+    public void SeedUser(string userId, decimal startingBalance = 0m, string? name = null, string? handle = null)
     {
         lock (_gate)
         {
@@ -25,6 +25,8 @@ public sealed class InMemoryCopilotRepository(string configuredUserId) : ICopilo
             {
                 Id = userId,
                 DocType = "user",
+                Name = name ?? userId,
+                Handle = handle ?? "",
                 Financial = new UserFinancialDocument { StartingBalance = startingBalance }
             };
         }
@@ -287,6 +289,8 @@ public sealed class InMemoryCopilotRepository(string configuredUserId) : ICopilo
         {
             Id = user.Id,
             DocType = user.DocType,
+            Name = user.Name,
+            Handle = user.Handle,
             Financial = new UserFinancialDocument { StartingBalance = user.Financial.StartingBalance },
             DeletedAt = user.DeletedAt
         };

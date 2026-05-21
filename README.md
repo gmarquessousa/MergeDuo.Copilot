@@ -321,6 +321,7 @@ Cada item em `cards` inclui:
 - `title`: nome do cartao
 - `ownerUserId`: usuario responsavel pelo cartao
 - `ownerRole`: `primary` ou `partner`
+- `ownerName`: nome do usuario responsavel pelo cartao
 - `closingDay`: dia de fechamento
 - `dueDay`: dia de vencimento
 - `nextDueDate`: proxima data de vencimento calculada pelo fuso do negocio
@@ -341,6 +342,7 @@ Exemplo de resposta:
       "title": "Nubank",
       "ownerUserId": "usr_primary",
       "ownerRole": "primary",
+      "ownerName": "Gavriel",
       "closingDay": 28,
       "dueDay": 10,
       "nextDueDate": "2026-06-10",
