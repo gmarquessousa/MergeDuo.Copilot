@@ -310,12 +310,105 @@ public sealed record PurchaseSimulationInstallmentResponse(
     [property: JsonPropertyName("yearMonth")] string YearMonth,
     [property: JsonPropertyName("amount")] decimal Amount);
 
+public sealed record PurchaseSimulationAnalysisWindowResponse(
+    [property: JsonPropertyName("from")] DateOnly From,
+    [property: JsonPropertyName("to")] DateOnly To,
+    [property: JsonPropertyName("monthsCount")] int MonthsCount,
+    [property: JsonPropertyName("reason")] string Reason);
+
+public sealed record PurchaseSimulationDailyEventResponse(
+    [property: JsonPropertyName("description")] string Description,
+    [property: JsonPropertyName("amount")] decimal Amount,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("category")] string Category,
+    [property: JsonPropertyName("projected")] bool Projected);
+
+public sealed record PurchaseSimulationDailyImpactResponse(
+    [property: JsonPropertyName("date")] DateOnly Date,
+    [property: JsonPropertyName("day")] int Day,
+    [property: JsonPropertyName("baselineBalanceAfterDay")] decimal BaselineBalanceAfterDay,
+    [property: JsonPropertyName("projectedBalanceAfterDay")] decimal ProjectedBalanceAfterDay,
+    [property: JsonPropertyName("purchaseImpactOnDay")] decimal PurchaseImpactOnDay,
+    [property: JsonPropertyName("cumulativePurchaseImpactUntilDay")] decimal CumulativePurchaseImpactUntilDay,
+    [property: JsonPropertyName("baselineNet")] decimal BaselineNet,
+    [property: JsonPropertyName("projectedNet")] decimal ProjectedNet,
+    [property: JsonPropertyName("mainEvents")] IReadOnlyList<PurchaseSimulationDailyEventResponse> MainEvents);
+
+public sealed record PurchaseSimulationMonthRiskMetricsResponse(
+    [property: JsonPropertyName("baselineLowestBalance")] decimal BaselineLowestBalance,
+    [property: JsonPropertyName("baselineLowestBalanceDate")] DateOnly BaselineLowestBalanceDate,
+    [property: JsonPropertyName("projectedLowestBalance")] decimal ProjectedLowestBalance,
+    [property: JsonPropertyName("projectedLowestBalanceDate")] DateOnly ProjectedLowestBalanceDate,
+    [property: JsonPropertyName("lowestBalanceDelta")] decimal LowestBalanceDelta,
+    [property: JsonPropertyName("baselineNegativeBalanceDays")] int BaselineNegativeBalanceDays,
+    [property: JsonPropertyName("projectedNegativeBalanceDays")] int ProjectedNegativeBalanceDays,
+    [property: JsonPropertyName("additionalNegativeBalanceDays")] int AdditionalNegativeBalanceDays,
+    [property: JsonPropertyName("baselineDaysBelowSafetyMargin")] int BaselineDaysBelowSafetyMargin,
+    [property: JsonPropertyName("projectedDaysBelowSafetyMargin")] int ProjectedDaysBelowSafetyMargin,
+    [property: JsonPropertyName("additionalDaysBelowSafetyMargin")] int AdditionalDaysBelowSafetyMargin,
+    [property: JsonPropertyName("safetyMarginAmount")] decimal SafetyMarginAmount,
+    [property: JsonPropertyName("endsMonthNegative")] bool EndsMonthNegative,
+    [property: JsonPropertyName("projectedEndBalance")] decimal ProjectedEndBalance,
+    [property: JsonPropertyName("baselineEndBalance")] decimal BaselineEndBalance,
+    [property: JsonPropertyName("endBalanceDelta")] decimal EndBalanceDelta,
+    [property: JsonPropertyName("monthHasInstallmentImpact")] bool MonthHasInstallmentImpact,
+    [property: JsonPropertyName("riskSignals")] IReadOnlyList<string> RiskSignals);
+
 public sealed record PurchaseSimulationMonthImpactResponse(
     [property: JsonPropertyName("period")] CopilotPeriodResponse Period,
     [property: JsonPropertyName("impactAmount")] decimal ImpactAmount,
     [property: JsonPropertyName("cumulativeImpact")] decimal CumulativeImpact,
     [property: JsonPropertyName("baselineTotals")] CopilotTotalsResponse BaselineTotals,
-    [property: JsonPropertyName("projectedTotals")] CopilotTotalsResponse ProjectedTotals);
+    [property: JsonPropertyName("projectedTotals")] CopilotTotalsResponse ProjectedTotals,
+    [property: JsonPropertyName("dailyImpact")] IReadOnlyList<PurchaseSimulationDailyImpactResponse> DailyImpact,
+    [property: JsonPropertyName("monthRiskMetrics")] PurchaseSimulationMonthRiskMetricsResponse MonthRiskMetrics);
+
+public sealed record PurchaseSimulationOverallRiskMetricsResponse(
+    [property: JsonPropertyName("safetyMarginAmount")] decimal SafetyMarginAmount,
+    [property: JsonPropertyName("baselineLowestBalance")] decimal BaselineLowestBalance,
+    [property: JsonPropertyName("baselineLowestBalanceDate")] DateOnly BaselineLowestBalanceDate,
+    [property: JsonPropertyName("projectedLowestBalance")] decimal ProjectedLowestBalance,
+    [property: JsonPropertyName("projectedLowestBalanceDate")] DateOnly ProjectedLowestBalanceDate,
+    [property: JsonPropertyName("lowestBalanceDelta")] decimal LowestBalanceDelta,
+    [property: JsonPropertyName("baselineNegativeBalanceDays")] int BaselineNegativeBalanceDays,
+    [property: JsonPropertyName("projectedNegativeBalanceDays")] int ProjectedNegativeBalanceDays,
+    [property: JsonPropertyName("additionalNegativeBalanceDays")] int AdditionalNegativeBalanceDays,
+    [property: JsonPropertyName("baselineDaysBelowSafetyMargin")] int BaselineDaysBelowSafetyMargin,
+    [property: JsonPropertyName("projectedDaysBelowSafetyMargin")] int ProjectedDaysBelowSafetyMargin,
+    [property: JsonPropertyName("additionalDaysBelowSafetyMargin")] int AdditionalDaysBelowSafetyMargin,
+    [property: JsonPropertyName("monthsWithNegativeBalance")] IReadOnlyList<string> MonthsWithNegativeBalance,
+    [property: JsonPropertyName("monthsBelowSafetyMargin")] IReadOnlyList<string> MonthsBelowSafetyMargin,
+    [property: JsonPropertyName("worstMonth")] string WorstMonth,
+    [property: JsonPropertyName("worstProjectedEndBalance")] decimal WorstProjectedEndBalance,
+    [property: JsonPropertyName("totalPurchaseImpact")] decimal TotalPurchaseImpact,
+    [property: JsonPropertyName("averageMonthlyImpact")] decimal AverageMonthlyImpact,
+    [property: JsonPropertyName("maxMonthlyImpact")] decimal MaxMonthlyImpact,
+    [property: JsonPropertyName("riskSignals")] IReadOnlyList<string> RiskSignals);
+
+public sealed record PurchaseSimulationPaymentScheduleAnalysisResponse(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("cardId")] string CardId,
+    [property: JsonPropertyName("cardTitle")] string CardTitle,
+    [property: JsonPropertyName("cardOwnerName")] string CardOwnerName,
+    [property: JsonPropertyName("closingDay")] int ClosingDay,
+    [property: JsonPropertyName("dueDay")] int DueDay,
+    [property: JsonPropertyName("totalInstallments")] int TotalInstallments,
+    [property: JsonPropertyName("firstImpactDate")] DateOnly FirstImpactDate,
+    [property: JsonPropertyName("lastImpactDate")] DateOnly LastImpactDate,
+    [property: JsonPropertyName("firstImpactedMonth")] string FirstImpactedMonth,
+    [property: JsonPropertyName("lastImpactedMonth")] string LastImpactedMonth,
+    [property: JsonPropertyName("installmentAmount")] decimal InstallmentAmount,
+    [property: JsonPropertyName("totalAmount")] decimal TotalAmount);
+
+public sealed record PurchaseSimulationAiAnalysisDataResponse(
+    [property: JsonPropertyName("purchaseSummary")] string PurchaseSummary,
+    [property: JsonPropertyName("analysisHorizonSummary")] string AnalysisHorizonSummary,
+    [property: JsonPropertyName("financialImpactSummary")] string FinancialImpactSummary,
+    [property: JsonPropertyName("lowestBalanceSummary")] string LowestBalanceSummary,
+    [property: JsonPropertyName("safetyMarginSummary")] string SafetyMarginSummary,
+    [property: JsonPropertyName("riskFacts")] IReadOnlyList<string> RiskFacts,
+    [property: JsonPropertyName("positiveFacts")] IReadOnlyList<string> PositiveFacts,
+    [property: JsonPropertyName("attentionPoints")] IReadOnlyList<string> AttentionPoints);
 
 public sealed record CopilotPurchaseSimulationResponse(
     [property: JsonPropertyName("scope")] string Scope,
@@ -326,6 +419,11 @@ public sealed record CopilotPurchaseSimulationResponse(
     [property: JsonPropertyName("purchaseDate")] DateOnly PurchaseDate,
     [property: JsonPropertyName("cardId")] string? CardId,
     [property: JsonPropertyName("installments")] IReadOnlyList<PurchaseSimulationInstallmentResponse> Installments,
+    [property: JsonPropertyName("analysisWindow")] PurchaseSimulationAnalysisWindowResponse AnalysisWindow,
     [property: JsonPropertyName("monthImpacts")] IReadOnlyList<PurchaseSimulationMonthImpactResponse> MonthImpacts,
+    [property: JsonPropertyName("overallRiskMetrics")] PurchaseSimulationOverallRiskMetricsResponse OverallRiskMetrics,
+    [property: JsonPropertyName("paymentScheduleAnalysis")] PurchaseSimulationPaymentScheduleAnalysisResponse PaymentScheduleAnalysis,
+    [property: JsonPropertyName("aiAnalysisData")] PurchaseSimulationAiAnalysisDataResponse AiAnalysisData,
+    [property: JsonPropertyName("aiContextText")] string AiContextText,
     [property: JsonPropertyName("computedAt")] DateTimeOffset ComputedAt,
     [property: JsonPropertyName("summaryText")] string SummaryText);

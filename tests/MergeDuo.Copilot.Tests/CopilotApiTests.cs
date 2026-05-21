@@ -217,7 +217,7 @@ public sealed class CopilotApiTests
     }
 
     [Fact]
-    public async Task Purchase_simulation_cash_does_not_persist()
+    public async Task Purchase_simulation_cash_returns_daily_risk_window_ai_context_and_does_not_persist()
     {
         using var factory = new TestCopilotFactory();
         using var client = factory.CreateHttpsClient();
@@ -226,8 +226,8 @@ public sealed class CopilotApiTests
         var response = await client.PostAsJsonAsync("/copilot/purchase-simulation", new
         {
             description = "Mesa",
-            amount = 250m,
-            purchaseDate = "2026-05-22",
+            amount = 1200m,
+            purchaseDate = "2026-05-21",
             paymentType = "cash"
         });
         await EnsureSuccessAsync(response);
@@ -235,10 +235,23 @@ public sealed class CopilotApiTests
 
         Assert.Equal("cash", simulation.PaymentType);
         Assert.Single(simulation.Installments);
-        Assert.Equal(new DateOnly(2026, 5, 22), simulation.Installments[0].Date);
+        Assert.Equal(new DateOnly(2026, 5, 21), simulation.Installments[0].Date);
         Assert.Equal("2026-05", simulation.Installments[0].YearMonth);
-        Assert.Equal(250, simulation.MonthImpacts[0].ImpactAmount);
-        Assert.Equal(750, simulation.MonthImpacts[0].ProjectedTotals.Saldo);
+        Assert.Equal(new DateOnly(2026, 5, 1), simulation.AnalysisWindow.From);
+        Assert.Equal(new DateOnly(2026, 8, 31), simulation.AnalysisWindow.To);
+        Assert.Equal(4, simulation.AnalysisWindow.MonthsCount);
+        Assert.Equal(["2026-05", "2026-06", "2026-07", "2026-08"], simulation.MonthImpacts.Select(x => x.Period.YearMonth).ToArray());
+        Assert.Equal(1200, simulation.MonthImpacts[0].ImpactAmount);
+        Assert.Equal(-200, simulation.MonthImpacts[0].ProjectedTotals.Saldo);
+
+        var impactDay = simulation.MonthImpacts[0].DailyImpact.Single(x => x.Date == new DateOnly(2026, 5, 21));
+        Assert.Equal(1200, impactDay.PurchaseImpactOnDay);
+        Assert.Equal(1200, impactDay.CumulativePurchaseImpactUntilDay);
+        Assert.Equal(-200, impactDay.ProjectedBalanceAfterDay);
+        Assert.Equal(-200, simulation.MonthImpacts[0].MonthRiskMetrics.ProjectedLowestBalance);
+        Assert.True(simulation.MonthImpacts[0].MonthRiskMetrics.AdditionalDaysBelowSafetyMargin > 0);
+        Assert.Contains("PROJECTED_LOWEST_BALANCE_BELOW_ZERO", simulation.OverallRiskMetrics.RiskSignals);
+        Assert.False(string.IsNullOrWhiteSpace(simulation.AiContextText));
         Assert.Contains("Nenhuma transacao foi criada", simulation.SummaryText);
         Assert.Equal(0, factory.Repository.MutationCount);
     }
@@ -300,37 +313,87 @@ public sealed class CopilotApiTests
     }
 
     [Fact]
-    public async Task Purchase_simulation_credit_card_uses_closing_and_due_dates()
+    public async Task Purchase_simulation_credit_card_returns_schedule_window_and_overall_risk_metrics()
     {
         using var factory = new TestCopilotFactory();
         using var client = factory.CreateHttpsClient();
-        factory.Repository.SeedUser("usr_primary", 1000);
+        factory.Repository.SeedUser("usr_primary", 5000, name: "Gabriel Marques Lima");
         factory.Repository.SeedCard(new CardDocument
         {
             Id = "card_main",
             UserId = "usr_primary",
-            ClosingDay = 28,
-            DueDay = 5
+            Title = "Inter",
+            ClosingDay = 19,
+            DueDay = 25
         });
 
         var response = await client.PostAsJsonAsync("/copilot/purchase-simulation", new
         {
             description = "Notebook",
-            amount = 1000m,
-            purchaseDate = "2026-05-29",
+            amount = 3500m,
+            purchaseDate = "2026-05-21",
             paymentType = "credit_card",
             cardId = "card_main",
-            installments = 2
+            installments = 6
         });
         await EnsureSuccessAsync(response);
         var simulation = (await response.Content.ReadFromJsonAsync<CopilotPurchaseSimulationResponse>())!;
 
         Assert.Equal("credit_card", simulation.PaymentType);
         Assert.Equal("card_main", simulation.CardId);
-        Assert.Equal([new DateOnly(2026, 7, 5), new DateOnly(2026, 8, 5)], simulation.Installments.Select(x => x.Date).ToArray());
-        Assert.Equal(["2026-07", "2026-08"], simulation.MonthImpacts.Select(x => x.Period.YearMonth).ToArray());
-        Assert.All(simulation.Installments, installment => Assert.Equal(500, installment.Amount));
+        Assert.Equal([
+            new DateOnly(2026, 6, 25),
+            new DateOnly(2026, 7, 25),
+            new DateOnly(2026, 8, 25),
+            new DateOnly(2026, 9, 25),
+            new DateOnly(2026, 10, 25),
+            new DateOnly(2026, 11, 25)
+        ], simulation.Installments.Select(x => x.Date).ToArray());
+        Assert.Equal(new DateOnly(2026, 6, 1), simulation.AnalysisWindow.From);
+        Assert.Equal(new DateOnly(2027, 2, 28), simulation.AnalysisWindow.To);
+        Assert.Equal(9, simulation.AnalysisWindow.MonthsCount);
+        Assert.Equal(["2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12", "2027-01", "2027-02"], simulation.MonthImpacts.Select(x => x.Period.YearMonth).ToArray());
+        Assert.Equal(583.33m, simulation.Installments[0].Amount);
+        Assert.Equal(583.35m, simulation.Installments[^1].Amount);
+        Assert.Equal(583.33m, simulation.MonthImpacts[0].ImpactAmount);
+        Assert.True(simulation.MonthImpacts[0].MonthRiskMetrics.MonthHasInstallmentImpact);
+        Assert.False(simulation.MonthImpacts[^1].MonthRiskMetrics.MonthHasInstallmentImpact);
+        Assert.Equal("credit_card", simulation.PaymentScheduleAnalysis.Type);
+        Assert.Equal("Inter", simulation.PaymentScheduleAnalysis.CardTitle);
+        Assert.Equal("Gabriel Marques Lima", simulation.PaymentScheduleAnalysis.CardOwnerName);
+        Assert.Equal(19, simulation.PaymentScheduleAnalysis.ClosingDay);
+        Assert.Equal(25, simulation.PaymentScheduleAnalysis.DueDay);
+        Assert.Equal(new DateOnly(2026, 6, 25), simulation.PaymentScheduleAnalysis.FirstImpactDate);
+        Assert.Equal(new DateOnly(2026, 11, 25), simulation.PaymentScheduleAnalysis.LastImpactDate);
+        Assert.Equal(3500, simulation.OverallRiskMetrics.TotalPurchaseImpact);
+        Assert.Equal(583.33m, simulation.OverallRiskMetrics.AverageMonthlyImpact);
+        Assert.Contains("LONG_INSTALLMENT_COMMITMENT", simulation.OverallRiskMetrics.RiskSignals);
+        Assert.Contains("MULTIPLE_MONTHS_IMPACTED", simulation.OverallRiskMetrics.RiskSignals);
         Assert.Equal(0, factory.Repository.MutationCount);
+    }
+
+    [Fact]
+    public async Task Purchase_simulation_small_purchase_returns_no_critical_risk()
+    {
+        using var factory = new TestCopilotFactory();
+        using var client = factory.CreateHttpsClient();
+        factory.Repository.SeedUser("usr_primary", 5000);
+
+        var response = await client.PostAsJsonAsync("/copilot/purchase-simulation", new
+        {
+            description = "Cafe",
+            amount = 50m,
+            purchaseDate = "2026-05-21",
+            paymentType = "cash"
+        });
+        await EnsureSuccessAsync(response);
+        var simulation = (await response.Content.ReadFromJsonAsync<CopilotPurchaseSimulationResponse>())!;
+
+        Assert.Equal(["NO_CRITICAL_RISK_DETECTED"], simulation.OverallRiskMetrics.RiskSignals);
+        Assert.All(simulation.MonthImpacts, impact => Assert.Equal(["NO_CRITICAL_RISK_DETECTED"], impact.MonthRiskMetrics.RiskSignals));
+        Assert.Equal(0, simulation.OverallRiskMetrics.AdditionalNegativeBalanceDays);
+        Assert.Equal(0, simulation.OverallRiskMetrics.AdditionalDaysBelowSafetyMargin);
+        Assert.False(string.IsNullOrWhiteSpace(simulation.AiContextText));
     }
 
     [Fact]

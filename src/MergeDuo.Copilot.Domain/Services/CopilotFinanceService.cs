@@ -16,6 +16,16 @@ public sealed class CopilotFinanceService(
     TimeProvider clock) : ICopilotFinanceService
 {
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
+    private const string SignalProjectedLowestBalanceBelowZero = "PROJECTED_LOWEST_BALANCE_BELOW_ZERO";
+    private const string SignalProjectedEndBalanceBelowZero = "PROJECTED_END_BALANCE_BELOW_ZERO";
+    private const string SignalProjectedEndBalanceLow = "PROJECTED_END_BALANCE_LOW";
+    private const string SignalSafetyMarginCompromised = "SAFETY_MARGIN_COMPROMISED";
+    private const string SignalAdditionalNegativeDaysCreated = "ADDITIONAL_NEGATIVE_DAYS_CREATED";
+    private const string SignalAdditionalLowBalanceDaysCreated = "ADDITIONAL_LOW_BALANCE_DAYS_CREATED";
+    private const string SignalHighMonthlyImpact = "HIGH_MONTHLY_IMPACT";
+    private const string SignalLongInstallmentCommitment = "LONG_INSTALLMENT_COMMITMENT";
+    private const string SignalMultipleMonthsImpacted = "MULTIPLE_MONTHS_IMPACTED";
+    private const string SignalNoCriticalRiskDetected = "NO_CRITICAL_RISK_DETECTED";
 
     public async Task<CopilotMonthSummaryResponse> GetMonthSummaryAsync(
         int year,
@@ -153,34 +163,89 @@ public sealed class CopilotFinanceService(
             .ThenBy(x => x.Month)
             .ToArray();
 
-        var monthImpacts = new List<PurchaseSimulationMonthImpactResponse>(impactedMonths.Length);
-        decimal cumulativeImpact = 0m;
-        foreach (var impactedMonth in impactedMonths)
-        {
-            var baseline = await BuildMonthSummaryAsync(owners, impactedMonth, includeAllRelevantMovements: true, cancellationToken);
-            var monthImpact = installments
-                .Where(x => x.YearMonth == impactedMonth.Value)
-                .Sum(x => x.Amount);
-            cumulativeImpact += monthImpact;
+        var analysisWindow = BuildAnalysisWindow(paymentType, purchaseDate, installments);
+        var analysisMonths = MonthsBetween(
+            YearMonth.FromDate(analysisWindow.From),
+            YearMonth.FromDate(analysisWindow.To));
+        var paymentScheduleAnalysis = BuildPaymentScheduleAnalysis(
+            paymentType,
+            amount,
+            cardId ?? "",
+            card,
+            impactOwnerUserId,
+            owners,
+            installments);
+        var safetyMarginAmount = ConfiguredSafetyMarginAmount();
 
-            var projectedTotals = baseline.Totals with
+        var monthImpacts = new List<PurchaseSimulationMonthImpactResponse>(analysisMonths.Count);
+        decimal previousCumulativeImpact = 0m;
+        foreach (var analysisMonth in analysisMonths)
+        {
+            var baseline = await BuildMonthSummaryAsync(owners, analysisMonth, includeAllRelevantMovements: true, cancellationToken);
+            var monthInstallments = installments
+                .Where(x => x.YearMonth == analysisMonth.Value)
+                .ToArray();
+            var monthImpact = MoneyValue(monthInstallments.Sum(x => x.Amount));
+            var cumulativeImpact = MoneyValue(previousCumulativeImpact + monthImpact);
+            var dailyImpact = BuildDailyImpact(
+                baseline,
+                monthInstallments,
+                previousCumulativeImpact,
+                description,
+                paymentType);
+
+            var baselineTotals = SimulationTotals(baseline.Totals);
+            var projectedTotals = SimulationTotals(baseline.Totals with
             {
-                Saidas = baseline.Totals.Saidas + monthImpact,
-                Saldo = baseline.Totals.Saldo - cumulativeImpact,
-                Patrimonio = baseline.Totals.Patrimonio - cumulativeImpact,
-                SaldoHoje = null,
-                InvestidoHoje = null,
-                PatrimonioHoje = null
-            };
+                Saidas = MoneyValue(baseline.Totals.Saidas + monthImpact),
+                Saldo = MoneyValue(baseline.Totals.Saldo - cumulativeImpact),
+                Patrimonio = MoneyValue(baseline.Totals.Patrimonio - cumulativeImpact),
+                SaldoHoje = 0,
+                InvestidoHoje = 0,
+                PatrimonioHoje = 0
+            });
+
+            var monthRiskMetrics = BuildMonthRiskMetrics(
+                baseline.Period,
+                dailyImpact,
+                safetyMarginAmount,
+                monthImpact);
 
             monthImpacts.Add(new PurchaseSimulationMonthImpactResponse(
                 baseline.Period,
                 monthImpact,
                 cumulativeImpact,
-                baseline.Totals,
-                projectedTotals));
+                baselineTotals,
+                projectedTotals,
+                dailyImpact,
+                monthRiskMetrics));
+
+            previousCumulativeImpact = cumulativeImpact;
         }
 
+        var overallRiskMetrics = BuildOverallRiskMetrics(
+            monthImpacts,
+            safetyMarginAmount,
+            MoneyValue(installments.Sum(x => x.Amount)),
+            impactedMonths,
+            totalInstallments);
+        var aiAnalysisData = BuildAiAnalysisData(
+            description,
+            amount,
+            purchaseDate,
+            paymentType,
+            analysisWindow,
+            paymentScheduleAnalysis,
+            monthImpacts,
+            overallRiskMetrics);
+        var aiContextText = SimulationAiContextText(
+            description,
+            amount,
+            purchaseDate,
+            paymentType,
+            analysisWindow,
+            aiAnalysisData,
+            overallRiskMetrics);
         var response = new CopilotPurchaseSimulationResponse(
             owners.Scope,
             owners.Responses,
@@ -188,9 +253,14 @@ public sealed class CopilotFinanceService(
             paymentType,
             amount,
             purchaseDate,
-            cardId,
+            cardId ?? "",
             installments,
+            analysisWindow,
             monthImpacts,
+            overallRiskMetrics,
+            paymentScheduleAnalysis,
+            aiAnalysisData,
+            aiContextText,
             clock.GetUtcNow(),
             "");
 
@@ -737,7 +807,7 @@ public sealed class CopilotFinanceService(
     {
         if (dailyCashflow.Count == 0)
         {
-            return new CopilotCashflowMetricsResponse(0, 0, 0, null, 0, 0, MoneyValue(options.SafetyMarginValue), null, null);
+            return new CopilotCashflowMetricsResponse(0, 0, 0, null, 0, 0, ConfiguredSafetyMarginAmount(), null, null);
         }
 
         var first = dailyCashflow[0];
@@ -756,7 +826,7 @@ public sealed class CopilotFinanceService(
                 : dailyCashflow[nextIncome.Day - 2].BalanceAfterDay;
         }
 
-        var safetyMargin = MoneyValue(options.SafetyMarginValue);
+        var safetyMargin = ConfiguredSafetyMarginAmount();
         return new CopilotCashflowMetricsResponse(
             openingBalance,
             dailyCashflow[^1].BalanceAfterDay,
@@ -767,6 +837,448 @@ public sealed class CopilotFinanceService(
             safetyMargin,
             nextIncome?.Date,
             balanceBeforeNextIncome);
+    }
+
+    private PurchaseSimulationAnalysisWindowResponse BuildAnalysisWindow(
+        string paymentType,
+        DateOnly purchaseDate,
+        IReadOnlyList<PurchaseSimulationInstallmentResponse> installments)
+    {
+        var firstMonth = paymentType == "cash"
+            ? YearMonth.FromDate(purchaseDate)
+            : YearMonth.FromDate(installments[0].Date);
+        var lastImpactedMonth = paymentType == "cash"
+            ? firstMonth
+            : YearMonth.FromDate(installments[^1].Date);
+        var lastMonth = lastImpactedMonth.AddMonths(3);
+        var reason = paymentType == "cash"
+            ? "Compra a vista analisada no mes da compra e nos 3 meses seguintes."
+            : "Compra parcelada analisada durante todos os meses com parcelas e mais 3 meses apos a ultima parcela.";
+
+        return new PurchaseSimulationAnalysisWindowResponse(
+            firstMonth.FirstDay,
+            lastMonth.LastDay,
+            MonthsBetween(firstMonth, lastMonth).Count,
+            reason);
+    }
+
+    private static IReadOnlyList<YearMonth> MonthsBetween(YearMonth first, YearMonth last)
+    {
+        var months = new List<YearMonth>();
+        var current = first;
+        while (current.IsBeforeOrEqual(last))
+        {
+            months.Add(current);
+            current = current.AddMonths(1);
+        }
+
+        return months;
+    }
+
+    private static PurchaseSimulationPaymentScheduleAnalysisResponse BuildPaymentScheduleAnalysis(
+        string paymentType,
+        decimal amount,
+        string cardId,
+        CardDocument? card,
+        string impactOwnerUserId,
+        OwnerSet owners,
+        IReadOnlyList<PurchaseSimulationInstallmentResponse> installments)
+    {
+        var first = installments[0];
+        var last = installments[^1];
+        var cardTitle = card is null
+            ? ""
+            : string.IsNullOrWhiteSpace(card.Title) ? card.Id : card.Title.Trim();
+
+        return new PurchaseSimulationPaymentScheduleAnalysisResponse(
+            paymentType,
+            cardId,
+            cardTitle,
+            card is null ? "" : OwnerName(owners, impactOwnerUserId),
+            card?.ClosingDay ?? 0,
+            card?.DueDay ?? 0,
+            installments.Count,
+            first.Date,
+            last.Date,
+            first.YearMonth,
+            last.YearMonth,
+            MoneyValue(first.Amount),
+            MoneyValue(amount));
+    }
+
+    private static IReadOnlyList<PurchaseSimulationDailyImpactResponse> BuildDailyImpact(
+        CopilotMonthSummaryResponse baseline,
+        IReadOnlyList<PurchaseSimulationInstallmentResponse> monthInstallments,
+        decimal previousCumulativeImpact,
+        string description,
+        string paymentType)
+    {
+        var impactByDay = monthInstallments
+            .GroupBy(x => x.Date.Day)
+            .ToDictionary(x => x.Key, x => MoneyValue(x.Sum(i => i.Amount)));
+        var daily = new List<PurchaseSimulationDailyImpactResponse>(baseline.DailyCashflow.Count);
+        var cumulativeImpact = MoneyValue(previousCumulativeImpact);
+
+        foreach (var day in baseline.DailyCashflow)
+        {
+            var purchaseImpactOnDay = impactByDay.GetValueOrDefault(day.Day);
+            cumulativeImpact = MoneyValue(cumulativeImpact + purchaseImpactOnDay);
+            var projectedNet = MoneyValue(day.Net - purchaseImpactOnDay);
+            var projectedBalanceAfterDay = MoneyValue(day.BalanceAfterDay - cumulativeImpact);
+            var mainEvents = day.MainEvents
+                .Select(ToSimulationDailyEvent)
+                .ToList();
+
+            if (purchaseImpactOnDay > 0)
+            {
+                mainEvents.Add(SimulationPurchaseEvent(description, purchaseImpactOnDay, paymentType));
+            }
+
+            daily.Add(new PurchaseSimulationDailyImpactResponse(
+                day.Date,
+                day.Day,
+                MoneyValue(day.BalanceAfterDay),
+                projectedBalanceAfterDay,
+                purchaseImpactOnDay,
+                cumulativeImpact,
+                MoneyValue(day.Net),
+                projectedNet,
+                mainEvents));
+        }
+
+        return daily;
+    }
+
+    private static PurchaseSimulationDailyEventResponse ToSimulationDailyEvent(CopilotDailyEventResponse movement) =>
+        new(
+            movement.Description,
+            MoneyValue(movement.Amount),
+            movement.Kind,
+            movement.Category,
+            movement.Projected);
+
+    private static PurchaseSimulationDailyEventResponse SimulationPurchaseEvent(
+        string description,
+        decimal amount,
+        string paymentType) =>
+        new(
+            $"Simulacao: {description}",
+            MoneyValue(amount),
+            AggregateKinds.Out,
+            paymentType == "credit_card" ? AggregateCategories.CreditCard : AggregateCategories.VariableExpense,
+            true);
+
+    private static PurchaseSimulationMonthRiskMetricsResponse BuildMonthRiskMetrics(
+        CopilotPeriodResponse period,
+        IReadOnlyList<PurchaseSimulationDailyImpactResponse> dailyImpact,
+        decimal safetyMarginAmount,
+        decimal monthImpact)
+    {
+        if (dailyImpact.Count == 0)
+        {
+            return new PurchaseSimulationMonthRiskMetricsResponse(
+                0,
+                period.From,
+                0,
+                period.From,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                safetyMarginAmount,
+                false,
+                0,
+                0,
+                0,
+                monthImpact > 0,
+                [SignalNoCriticalRiskDetected]);
+        }
+
+        var baselineLowest = dailyImpact
+            .OrderBy(x => x.BaselineBalanceAfterDay)
+            .ThenBy(x => x.Date)
+            .First();
+        var projectedLowest = dailyImpact
+            .OrderBy(x => x.ProjectedBalanceAfterDay)
+            .ThenBy(x => x.Date)
+            .First();
+        var baselineNegativeBalanceDays = dailyImpact.Count(x => x.BaselineBalanceAfterDay < 0);
+        var projectedNegativeBalanceDays = dailyImpact.Count(x => x.ProjectedBalanceAfterDay < 0);
+        var baselineDaysBelowSafetyMargin = dailyImpact.Count(x => x.BaselineBalanceAfterDay < safetyMarginAmount);
+        var projectedDaysBelowSafetyMargin = dailyImpact.Count(x => x.ProjectedBalanceAfterDay < safetyMarginAmount);
+        var baselineEndBalance = dailyImpact[^1].BaselineBalanceAfterDay;
+        var projectedEndBalance = dailyImpact[^1].ProjectedBalanceAfterDay;
+        var additionalNegativeBalanceDays = Math.Max(0, projectedNegativeBalanceDays - baselineNegativeBalanceDays);
+        var additionalDaysBelowSafetyMargin = Math.Max(0, projectedDaysBelowSafetyMargin - baselineDaysBelowSafetyMargin);
+
+        var metrics = new PurchaseSimulationMonthRiskMetricsResponse(
+            MoneyValue(baselineLowest.BaselineBalanceAfterDay),
+            baselineLowest.Date,
+            MoneyValue(projectedLowest.ProjectedBalanceAfterDay),
+            projectedLowest.Date,
+            MoneyValue(projectedLowest.ProjectedBalanceAfterDay - baselineLowest.BaselineBalanceAfterDay),
+            baselineNegativeBalanceDays,
+            projectedNegativeBalanceDays,
+            additionalNegativeBalanceDays,
+            baselineDaysBelowSafetyMargin,
+            projectedDaysBelowSafetyMargin,
+            additionalDaysBelowSafetyMargin,
+            safetyMarginAmount,
+            projectedEndBalance < 0,
+            MoneyValue(projectedEndBalance),
+            MoneyValue(baselineEndBalance),
+            MoneyValue(projectedEndBalance - baselineEndBalance),
+            monthImpact > 0,
+            []);
+
+        return metrics with { RiskSignals = BuildMonthRiskSignals(metrics, monthImpact) };
+    }
+
+    private static IReadOnlyList<string> BuildMonthRiskSignals(
+        PurchaseSimulationMonthRiskMetricsResponse metrics,
+        decimal monthImpact)
+    {
+        var signals = new List<string>();
+        AddSignalIf(signals, metrics.ProjectedLowestBalance < 0, SignalProjectedLowestBalanceBelowZero);
+        AddSignalIf(signals, metrics.ProjectedEndBalance < 0, SignalProjectedEndBalanceBelowZero);
+        AddSignalIf(signals, metrics.ProjectedEndBalance >= 0 && metrics.ProjectedEndBalance < metrics.SafetyMarginAmount, SignalProjectedEndBalanceLow);
+        AddSignalIf(signals, metrics.AdditionalNegativeBalanceDays > 0, SignalAdditionalNegativeDaysCreated);
+        AddSignalIf(signals, metrics.AdditionalDaysBelowSafetyMargin > 0, SignalAdditionalLowBalanceDaysCreated);
+        AddSignalIf(
+            signals,
+            metrics.AdditionalDaysBelowSafetyMargin > 0 || metrics.ProjectedEndBalance < metrics.SafetyMarginAmount,
+            SignalSafetyMarginCompromised);
+        AddSignalIf(signals, monthImpact >= metrics.SafetyMarginAmount, SignalHighMonthlyImpact);
+
+        if (signals.Count == 0)
+        {
+            signals.Add(SignalNoCriticalRiskDetected);
+        }
+
+        return signals;
+    }
+
+    private static PurchaseSimulationOverallRiskMetricsResponse BuildOverallRiskMetrics(
+        IReadOnlyList<PurchaseSimulationMonthImpactResponse> monthImpacts,
+        decimal safetyMarginAmount,
+        decimal totalPurchaseImpact,
+        IReadOnlyList<YearMonth> impactedMonths,
+        int totalInstallments)
+    {
+        var allDailyImpact = monthImpacts.SelectMany(x => x.DailyImpact).ToArray();
+        var baselineLowest = allDailyImpact
+            .OrderBy(x => x.BaselineBalanceAfterDay)
+            .ThenBy(x => x.Date)
+            .First();
+        var projectedLowest = allDailyImpact
+            .OrderBy(x => x.ProjectedBalanceAfterDay)
+            .ThenBy(x => x.Date)
+            .First();
+        var worstMonth = monthImpacts
+            .OrderBy(x => x.MonthRiskMetrics.ProjectedLowestBalance)
+            .ThenBy(x => x.Period.YearMonth, StringComparer.Ordinal)
+            .First();
+        var impactMonths = monthImpacts.Where(x => x.ImpactAmount > 0).ToArray();
+        var baselineNegativeBalanceDays = monthImpacts.Sum(x => x.MonthRiskMetrics.BaselineNegativeBalanceDays);
+        var projectedNegativeBalanceDays = monthImpacts.Sum(x => x.MonthRiskMetrics.ProjectedNegativeBalanceDays);
+        var baselineDaysBelowSafetyMargin = monthImpacts.Sum(x => x.MonthRiskMetrics.BaselineDaysBelowSafetyMargin);
+        var projectedDaysBelowSafetyMargin = monthImpacts.Sum(x => x.MonthRiskMetrics.ProjectedDaysBelowSafetyMargin);
+        var additionalNegativeBalanceDays = Math.Max(0, projectedNegativeBalanceDays - baselineNegativeBalanceDays);
+        var additionalDaysBelowSafetyMargin = Math.Max(0, projectedDaysBelowSafetyMargin - baselineDaysBelowSafetyMargin);
+        var maxMonthlyImpact = impactMonths.Length == 0 ? 0 : MoneyValue(impactMonths.Max(x => x.ImpactAmount));
+        var averageMonthlyImpact = impactMonths.Length == 0 ? 0 : MoneyValue(totalPurchaseImpact / impactMonths.Length);
+
+        var metrics = new PurchaseSimulationOverallRiskMetricsResponse(
+            safetyMarginAmount,
+            MoneyValue(baselineLowest.BaselineBalanceAfterDay),
+            baselineLowest.Date,
+            MoneyValue(projectedLowest.ProjectedBalanceAfterDay),
+            projectedLowest.Date,
+            MoneyValue(projectedLowest.ProjectedBalanceAfterDay - baselineLowest.BaselineBalanceAfterDay),
+            baselineNegativeBalanceDays,
+            projectedNegativeBalanceDays,
+            additionalNegativeBalanceDays,
+            baselineDaysBelowSafetyMargin,
+            projectedDaysBelowSafetyMargin,
+            additionalDaysBelowSafetyMargin,
+            monthImpacts
+                .Where(x => x.MonthRiskMetrics.ProjectedNegativeBalanceDays > 0)
+                .Select(x => x.Period.YearMonth)
+                .ToArray(),
+            monthImpacts
+                .Where(x => x.MonthRiskMetrics.ProjectedDaysBelowSafetyMargin > 0)
+                .Select(x => x.Period.YearMonth)
+                .ToArray(),
+            worstMonth.Period.YearMonth,
+            MoneyValue(worstMonth.MonthRiskMetrics.ProjectedEndBalance),
+            totalPurchaseImpact,
+            averageMonthlyImpact,
+            maxMonthlyImpact,
+            []);
+
+        return metrics with
+        {
+            RiskSignals = BuildOverallRiskSignals(metrics, monthImpacts, impactedMonths.Count, totalInstallments)
+        };
+    }
+
+    private static IReadOnlyList<string> BuildOverallRiskSignals(
+        PurchaseSimulationOverallRiskMetricsResponse metrics,
+        IReadOnlyList<PurchaseSimulationMonthImpactResponse> monthImpacts,
+        int impactedMonthsCount,
+        int totalInstallments)
+    {
+        var signals = monthImpacts
+            .SelectMany(x => x.MonthRiskMetrics.RiskSignals)
+            .Where(x => x != SignalNoCriticalRiskDetected)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        AddSignalIf(signals, metrics.MaxMonthlyImpact >= metrics.SafetyMarginAmount, SignalHighMonthlyImpact);
+        AddSignalIf(signals, totalInstallments >= 6, SignalLongInstallmentCommitment);
+        AddSignalIf(signals, impactedMonthsCount > 1, SignalMultipleMonthsImpacted);
+
+        if (signals.Count == 0)
+        {
+            signals.Add(SignalNoCriticalRiskDetected);
+        }
+
+        return signals;
+    }
+
+    private static void AddSignalIf(List<string> signals, bool condition, string signal)
+    {
+        if (condition && !signals.Contains(signal, StringComparer.Ordinal))
+        {
+            signals.Add(signal);
+        }
+    }
+
+    private PurchaseSimulationAiAnalysisDataResponse BuildAiAnalysisData(
+        string description,
+        decimal amount,
+        DateOnly purchaseDate,
+        string paymentType,
+        PurchaseSimulationAnalysisWindowResponse analysisWindow,
+        PurchaseSimulationPaymentScheduleAnalysisResponse paymentScheduleAnalysis,
+        IReadOnlyList<PurchaseSimulationMonthImpactResponse> monthImpacts,
+        PurchaseSimulationOverallRiskMetricsResponse overallRiskMetrics)
+    {
+        var firstImpactMonth = monthImpacts.FirstOrDefault(x => x.ImpactAmount > 0) ?? monthImpacts[0];
+        var riskFacts = new List<string>();
+        var positiveFacts = new List<string>
+        {
+            "A compra nao cria transacao real, e apenas simulacao."
+        };
+        var attentionPoints = new List<string>();
+
+        if (overallRiskMetrics.ProjectedLowestBalance < 0)
+        {
+            riskFacts.Add($"O menor saldo projetado fica abaixo de zero em {overallRiskMetrics.ProjectedLowestBalanceDate:yyyy-MM-dd}.");
+            attentionPoints.Add("Existe saldo diario projetado abaixo de zero na janela analisada.");
+        }
+
+        if (overallRiskMetrics.AdditionalNegativeBalanceDays > 0)
+        {
+            riskFacts.Add($"A compra cria {overallRiskMetrics.AdditionalNegativeBalanceDays} dia(s) adicional(is) com saldo negativo.");
+        }
+
+        if (overallRiskMetrics.AdditionalDaysBelowSafetyMargin > 0)
+        {
+            riskFacts.Add("A compra aumenta a quantidade de dias abaixo da margem de seguranca.");
+            attentionPoints.Add("A margem de seguranca fica mais pressionada apos a compra.");
+        }
+
+        if (overallRiskMetrics.MonthsWithNegativeBalance.Count > 0)
+        {
+            riskFacts.Add($"Ha saldo projetado abaixo de zero em {string.Join(", ", overallRiskMetrics.MonthsWithNegativeBalance)}.");
+        }
+
+        if (overallRiskMetrics.RiskSignals.Contains(SignalLongInstallmentCommitment, StringComparer.Ordinal))
+        {
+            attentionPoints.Add($"O parcelamento gera compromisso por {paymentScheduleAnalysis.TotalInstallments} meses.");
+        }
+
+        if (overallRiskMetrics.WorstProjectedEndBalance >= 0)
+        {
+            positiveFacts.Add($"O pior mes da janela termina com saldo projetado de {Money(overallRiskMetrics.WorstProjectedEndBalance)}.");
+        }
+
+        if (overallRiskMetrics.AdditionalNegativeBalanceDays == 0)
+        {
+            positiveFacts.Add("A compra nao cria dias adicionais com saldo negativo.");
+        }
+
+        if (overallRiskMetrics.RiskSignals.Contains(SignalNoCriticalRiskDetected, StringComparer.Ordinal))
+        {
+            positiveFacts.Add("Nao foram detectados sinais criticos de risco na janela analisada.");
+        }
+
+        if (overallRiskMetrics.WorstProjectedEndBalance < overallRiskMetrics.SafetyMarginAmount)
+        {
+            attentionPoints.Add($"O pior mes termina abaixo da margem de seguranca de {Money(overallRiskMetrics.SafetyMarginAmount)}.");
+        }
+
+        var safetyMarginSummary = overallRiskMetrics.ProjectedDaysBelowSafetyMargin > overallRiskMetrics.BaselineDaysBelowSafetyMargin
+            ? $"A quantidade de dias abaixo da margem de seguranca de {Money(overallRiskMetrics.SafetyMarginAmount)} aumenta de {overallRiskMetrics.BaselineDaysBelowSafetyMargin} para {overallRiskMetrics.ProjectedDaysBelowSafetyMargin} dias."
+            : $"A quantidade de dias abaixo da margem de seguranca de {Money(overallRiskMetrics.SafetyMarginAmount)} permanece em {overallRiskMetrics.ProjectedDaysBelowSafetyMargin} dias.";
+
+        return new PurchaseSimulationAiAnalysisDataResponse(
+            PurchaseSummary(description, amount, purchaseDate, paymentType, paymentScheduleAnalysis),
+            $"A analise considera {YearMonth.FromDate(analysisWindow.From).Value} ate {YearMonth.FromDate(analysisWindow.To).Value}.",
+            $"A compra reduz o saldo final de {firstImpactMonth.Period.YearMonth} de {Money(firstImpactMonth.MonthRiskMetrics.BaselineEndBalance)} para {Money(firstImpactMonth.MonthRiskMetrics.ProjectedEndBalance)}.",
+            $"O menor saldo projetado na janela fica em {Money(overallRiskMetrics.ProjectedLowestBalance)} no dia {overallRiskMetrics.ProjectedLowestBalanceDate:yyyy-MM-dd}.",
+            safetyMarginSummary,
+            riskFacts,
+            positiveFacts,
+            attentionPoints.Distinct(StringComparer.Ordinal).ToArray());
+    }
+
+    private static string PurchaseSummary(
+        string description,
+        decimal amount,
+        DateOnly purchaseDate,
+        string paymentType,
+        PurchaseSimulationPaymentScheduleAnalysisResponse paymentScheduleAnalysis)
+    {
+        if (paymentType == "credit_card")
+        {
+            return $"Compra \"{description}\" de {Money(amount)} no cartao em {paymentScheduleAnalysis.TotalInstallments} parcela(s), realizada em {purchaseDate:yyyy-MM-dd}.";
+        }
+
+        return $"Compra \"{description}\" de {Money(amount)} a vista em {purchaseDate:yyyy-MM-dd}.";
+    }
+
+    private static string SimulationAiContextText(
+        string description,
+        decimal amount,
+        DateOnly purchaseDate,
+        string paymentType,
+        PurchaseSimulationAnalysisWindowResponse analysisWindow,
+        PurchaseSimulationAiAnalysisDataResponse aiAnalysisData,
+        PurchaseSimulationOverallRiskMetricsResponse overallRiskMetrics)
+    {
+        var payment = paymentType == "credit_card" ? "cartao de credito" : "pagamento a vista";
+        return string.Join(" ", new[]
+        {
+            $"Simulacao de compra: {description}, {Money(amount)}, {payment} em {purchaseDate:yyyy-MM-dd}.",
+            $"Janela analisada: {YearMonth.FromDate(analysisWindow.From).Value} ate {YearMonth.FromDate(analysisWindow.To).Value}.",
+            aiAnalysisData.FinancialImpactSummary,
+            aiAnalysisData.LowestBalanceSummary,
+            aiAnalysisData.SafetyMarginSummary,
+            $"Sinais de risco: {string.Join(", ", overallRiskMetrics.RiskSignals)}.",
+            "A compra nao persiste transacao.",
+            "Use estes dados para avaliar se a compra pode comprometer a organizacao financeira."
+        });
+    }
+
+    private decimal ConfiguredSafetyMarginAmount()
+    {
+        var configured = options.SafetyMarginAmount > 0 ? options.SafetyMarginAmount : 1000m;
+        return MoneyValue(configured);
     }
 
     private static IReadOnlyList<CopilotCommitmentResponse> BuildCommitmentCalendar(
@@ -969,6 +1481,18 @@ public sealed class CopilotFinanceService(
 
     private static decimal MoneyValue(decimal value) =>
         Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    private static CopilotTotalsResponse SimulationTotals(CopilotTotalsResponse totals) =>
+        new(
+            MoneyValue(totals.Entradas),
+            MoneyValue(totals.Saidas),
+            MoneyValue(totals.Aportes),
+            MoneyValue(totals.Saldo),
+            MoneyValue(totals.Investido),
+            MoneyValue(totals.Patrimonio),
+            MoneyValue(totals.SaldoHoje ?? 0),
+            MoneyValue(totals.InvestidoHoje ?? 0),
+            MoneyValue(totals.PatrimonioHoje ?? 0));
 
     private static int CategoryOrder(string category) => category switch
     {
@@ -1200,14 +1724,10 @@ public sealed class CopilotFinanceService(
 
     private static string SimulationText(CopilotPurchaseSimulationResponse response)
     {
-        var last = response.MonthImpacts.LastOrDefault();
-        var impactText = last is null
-            ? "sem impacto mensal calculado"
-            : $"saldo projetado de {Money(last.ProjectedTotals.Saldo)} em {last.Period.YearMonth}";
         var payment = response.PaymentType == "credit_card"
             ? $"{response.Installments.Count}x no cartao"
             : "a vista";
-        return $"Simulacao da compra \"{response.Description}\" de {Money(response.Amount)} {payment}: {impactText}. Nenhuma transacao foi criada.";
+        return $"Simulacao da compra \"{response.Description}\" de {Money(response.Amount)} {payment}: janela {YearMonth.FromDate(response.AnalysisWindow.From).Value} ate {YearMonth.FromDate(response.AnalysisWindow.To).Value}, menor saldo projetado {Money(response.OverallRiskMetrics.ProjectedLowestBalance)} em {response.OverallRiskMetrics.ProjectedLowestBalanceDate:yyyy-MM-dd}, pior mes {response.OverallRiskMetrics.WorstMonth} com saldo final projetado de {Money(response.OverallRiskMetrics.WorstProjectedEndBalance)}. Nenhuma transacao foi criada.";
     }
 
     private static string CardsText(CopilotCardsResponse response)

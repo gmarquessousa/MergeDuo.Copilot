@@ -80,7 +80,7 @@ Cosmos__CardsContainer=cards
 Opcionais:
 
 ```text
-Copilot__SafetyMarginValue=500
+Copilot__SafetyMarginAmount=1000
 ```
 
 Escolha uma forma de conexao com Cosmos:
@@ -125,7 +125,7 @@ Na raiz do repositorio `MergeDuo.Copilot`:
 $env:ASPNETCORE_ENVIRONMENT="Development"
 $env:Copilot__UserId="usr_xxx"
 $env:Copilot__BusinessTimeZone="America/Sao_Paulo"
-$env:Copilot__SafetyMarginValue="500"
+$env:Copilot__SafetyMarginAmount="1000"
 $env:Cosmos__ConnectionString="AccountEndpoint=...;AccountKey=...;"
 $env:Cosmos__Database="mergeduo"
 $env:Cosmos__UsersContainer="users"
@@ -313,6 +313,38 @@ Regras:
 - Parcelas sao distribuidas por vencimento de fatura.
 - Nenhuma transacao e criada.
 
+Resposta:
+
+- Mantem os campos principais: `scope`, `owners`, `description`, `paymentType`, `amount`, `purchaseDate`, `cardId`, `installments`, `monthImpacts`, `computedAt` e `summaryText`.
+- `analysisWindow`: periodo analisado. Compra a vista analisa o mes da compra mais 3 meses; compra parcelada analisa todos os meses com parcelas mais 3 meses depois da ultima parcela.
+- `monthImpacts`: inclui `baselineTotals`, `projectedTotals`, `impactAmount`, `cumulativeImpact`, `dailyImpact` e `monthRiskMetrics`.
+- `monthImpacts.dailyImpact`: mostra, por dia, saldo baseline, saldo projetado, impacto da compra no dia, impacto acumulado, net baseline, net projetado e eventos principais.
+- `monthImpacts.monthRiskMetrics`: resume menor saldo do mes, dias negativos, dias abaixo da margem de seguranca, saldo final projetado e `riskSignals` do mes.
+- `overallRiskMetrics`: consolida a janela inteira, incluindo menor saldo projetado, dias adicionais de risco, meses negativos, pior mes, impacto total, impacto medio mensal, maior impacto mensal e `riskSignals`.
+- `paymentScheduleAnalysis`: explica tecnicamente como a compra entra no fluxo. Para cartao, inclui `cardId`, titulo, responsavel, fechamento, vencimento, primeira e ultima data de impacto.
+- `aiAnalysisData`: textos factuais e resumidos para uso direto pelo Copilot Studio, com `riskFacts`, `positiveFacts` e `attentionPoints`.
+- `aiContextText`: texto unico em portugues do Brasil para passar como contexto da IA.
+
+Sinais padronizados em `riskSignals`:
+
+- `PROJECTED_LOWEST_BALANCE_BELOW_ZERO`
+- `PROJECTED_END_BALANCE_BELOW_ZERO`
+- `PROJECTED_END_BALANCE_LOW`
+- `SAFETY_MARGIN_COMPROMISED`
+- `ADDITIONAL_NEGATIVE_DAYS_CREATED`
+- `ADDITIONAL_LOW_BALANCE_DAYS_CREATED`
+- `HIGH_MONTHLY_IMPACT`
+- `LONG_INSTALLMENT_COMMITMENT`
+- `MULTIPLE_MONTHS_IMPACTED`
+- `NO_CRITICAL_RISK_DETECTED`
+
+Margem de seguranca:
+
+- Configure `Copilot__SafetyMarginAmount`.
+- Se nao for configurada, o padrao usado pela simulacao e `1000`.
+- A API usa essa margem para calcular dias abaixo da margem no baseline, dias abaixo da margem no cenario projetado e dias adicionais causados pela compra.
+- A API retorna fatos e metricas. Ela nao retorna uma opiniao final do tipo "compre" ou "nao compre".
+
 ### GET /copilot/cards
 
 Lista os cartoes ativos disponiveis para o usuario configurado no Copilot. Se houver merge ativo, lista tambem os cartoes do parceiro.
@@ -463,7 +495,7 @@ No ACA, configure:
 ASPNETCORE_ENVIRONMENT=Production
 Copilot__UserId=usr_xxx
 Copilot__BusinessTimeZone=America/Sao_Paulo
-Copilot__SafetyMarginValue=500
+Copilot__SafetyMarginAmount=1000
 Cosmos__Database=mergeduo
 Cosmos__UsersContainer=users
 Cosmos__PartnershipsContainer=partnerships
@@ -492,7 +524,7 @@ az containerapp update \
     ASPNETCORE_ENVIRONMENT=Production \
     Copilot__UserId=usr_xxx \
     Copilot__BusinessTimeZone=America/Sao_Paulo \
-    Copilot__SafetyMarginValue=500 \
+    Copilot__SafetyMarginAmount=1000 \
     Cosmos__ConnectionString=secretref:cosmos-connection-string \
     Cosmos__Database=mergeduo \
     Cosmos__UsersContainer=users \
@@ -533,7 +565,7 @@ docker run --rm -p 5088:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
   -e Copilot__UserId=usr_xxx \
   -e Copilot__BusinessTimeZone=America/Sao_Paulo \
-  -e Copilot__SafetyMarginValue=500 \
+  -e Copilot__SafetyMarginAmount=1000 \
   -e Cosmos__ConnectionString="AccountEndpoint=...;AccountKey=...;" \
   -e Cosmos__Database=mergeduo \
   -e Cosmos__UsersContainer=users \
