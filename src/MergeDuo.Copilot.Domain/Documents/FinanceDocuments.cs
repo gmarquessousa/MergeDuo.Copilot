@@ -313,11 +313,17 @@ public sealed class CardDocument
     [JsonPropertyName("userId")]
     public string UserId { get; set; } = "";
 
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = "";
+
     [JsonPropertyName("closingDay")]
     public int ClosingDay { get; set; }
 
     [JsonPropertyName("dueDay")]
     public int DueDay { get; set; }
+
+    [JsonPropertyName("currency")]
+    public string Currency { get; set; } = "BRL";
 
     [JsonPropertyName("deletedAt")]
     public DateTimeOffset? DeletedAt { get; set; }

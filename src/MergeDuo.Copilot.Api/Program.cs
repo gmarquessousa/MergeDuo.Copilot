@@ -164,6 +164,17 @@ copilot.MapGet("/next-three-months", async (
 .WithSummary("Returns the current requested month plus the next two months for the configured Copilot user and active merge partner.")
 .RequireRateLimiting("copilot-read");
 
+copilot.MapGet("/cards", async (
+    ICopilotFinanceService service,
+    CancellationToken cancellationToken) =>
+{
+    var response = await service.ListCardsAsync(cancellationToken);
+    return Results.Ok(response);
+})
+.WithName("ListAvailableCards")
+.WithSummary("Lists active credit cards available to the configured Copilot user and active merge partner.")
+.RequireRateLimiting("copilot-read");
+
 copilot.MapPost("/purchase-simulation", async (
     PurchaseSimulationRequest? request,
     ICopilotFinanceService service,

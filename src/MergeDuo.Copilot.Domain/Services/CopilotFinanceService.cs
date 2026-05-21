@@ -197,6 +197,42 @@ public sealed class CopilotFinanceService(
         return response with { SummaryText = SimulationText(response) };
     }
 
+    public async Task<CopilotCardsResponse> ListCardsAsync(CancellationToken cancellationToken)
+    {
+        var owners = await ResolveOwnersAsync(cancellationToken);
+        var businessDate = BusinessToday();
+        var cards = new List<CopilotCardResponse>();
+
+        foreach (var owner in owners.Responses)
+        {
+            var ownerCards = await repository.ListActiveCardsAsync(owner.UserId, cancellationToken);
+            cards.AddRange(ownerCards.Select(card => new CopilotCardResponse(
+                card.Id,
+                string.IsNullOrWhiteSpace(card.Title) ? card.Id : card.Title,
+                owner.UserId,
+                owner.Role,
+                card.ClosingDay,
+                card.DueDay,
+                NextDueDate(card.DueDay, businessDate),
+                string.IsNullOrWhiteSpace(card.Currency) ? "BRL" : card.Currency)));
+        }
+
+        var ordered = cards
+            .OrderBy(x => x.OwnerRole == "primary" ? 0 : 1)
+            .ThenBy(x => x.Title, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Id, StringComparer.Ordinal)
+            .ToArray();
+
+        var response = new CopilotCardsResponse(
+            owners.Scope,
+            owners.Responses,
+            ordered,
+            clock.GetUtcNow(),
+            "");
+
+        return response with { SummaryText = CardsText(response) };
+    }
+
     private async Task<CopilotMonthSummaryResponse> BuildMonthSummaryAsync(
         OwnerSet owners,
         YearMonth yearMonth,
@@ -544,6 +580,18 @@ public sealed class CopilotFinanceService(
     private static DateOnly DateWithMonthFallback(int year, int month, int requestedDay) =>
         new(year, month, Math.Min(requestedDay, DateTime.DaysInMonth(year, month)));
 
+    private static DateOnly NextDueDate(int dueDay, DateOnly businessDate)
+    {
+        var currentMonthDueDate = DateWithMonthFallback(businessDate.Year, businessDate.Month, dueDay);
+        if (currentMonthDueDate >= businessDate)
+        {
+            return currentMonthDueDate;
+        }
+
+        var nextMonth = businessDate.AddMonths(1);
+        return DateWithMonthFallback(nextMonth.Year, nextMonth.Month, dueDay);
+    }
+
     private static string Money(decimal value) => value.ToString("C", PtBr);
 
     private static string MonthSummaryText(CopilotMonthSummaryResponse response)
@@ -568,6 +616,14 @@ public sealed class CopilotFinanceService(
             ? $"{response.Installments.Count}x no cartao"
             : "a vista";
         return $"Simulacao da compra \"{response.Description}\" de {Money(response.Amount)} {payment}: {impactText}. Nenhuma transacao foi criada.";
+    }
+
+    private static string CardsText(CopilotCardsResponse response)
+    {
+        var mergeText = response.Scope == "merged" ? " considerando o merge ativo" : "";
+        return response.Cards.Count == 0
+            ? $"Nenhum cartao ativo encontrado{mergeText}."
+            : $"{response.Cards.Count} cartao(oes) ativo(s) encontrado(s){mergeText}.";
     }
 
     private sealed record OwnerSet(

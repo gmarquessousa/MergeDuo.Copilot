@@ -8,6 +8,7 @@ public interface ICopilotFinanceService
 {
     Task<CopilotMonthSummaryResponse> GetMonthSummaryAsync(int year, int month, CancellationToken cancellationToken);
     Task<CopilotNextThreeMonthsResponse> GetNextThreeMonthsAsync(int? year, int? month, CancellationToken cancellationToken);
+    Task<CopilotCardsResponse> ListCardsAsync(CancellationToken cancellationToken);
     Task<CopilotPurchaseSimulationResponse> SimulatePurchaseAsync(PurchaseSimulationRequest? request, CancellationToken cancellationToken);
 }
 
@@ -49,6 +50,7 @@ public interface IFixedRulesProjectionRepository
 public interface ICardsProjectionRepository
 {
     Task<CardDocument?> GetActiveAsync(string userId, string cardId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<CardDocument>> ListActiveCardsAsync(string userId, CancellationToken cancellationToken);
 }
 
 public sealed record CopilotReadinessResult(bool Ready, string? Code = null, string? Detail = null);

@@ -145,6 +145,60 @@ public sealed class CopilotApiTests
     }
 
     [Fact]
+    public async Task Cards_endpoint_lists_active_cards_for_primary_and_partner()
+    {
+        using var factory = new TestCopilotFactory();
+        using var client = factory.CreateHttpsClient();
+        factory.Repository.SeedUser("usr_primary");
+        factory.Repository.SeedUser("usr_partner");
+        factory.Repository.SeedPartnership(new PartnershipDocument
+        {
+            Id = "pair_usr_primary_usr_partner",
+            PartnershipId = "pair_001",
+            UserId = "usr_primary",
+            PartnerUserId = "usr_partner",
+            Status = "active",
+            MergedSince = new DateOnly(2026, 1, 1)
+        });
+        factory.Repository.SeedCard(new CardDocument
+        {
+            Id = "card_primary",
+            UserId = "usr_primary",
+            Title = "Nubank",
+            ClosingDay = 28,
+            DueDay = 10,
+            Currency = "BRL"
+        });
+        factory.Repository.SeedCard(new CardDocument
+        {
+            Id = "card_partner",
+            UserId = "usr_partner",
+            Title = "Itau",
+            ClosingDay = 20,
+            DueDay = 25,
+            Currency = "BRL"
+        });
+
+        var response = await client.GetAsync("/copilot/cards");
+        await EnsureSuccessAsync(response);
+        var cards = (await response.Content.ReadFromJsonAsync<CopilotCardsResponse>())!;
+
+        Assert.Equal("merged", cards.Scope);
+        Assert.Equal(2, cards.Cards.Count);
+        Assert.Equal("card_primary", cards.Cards[0].Id);
+        Assert.Equal("Nubank", cards.Cards[0].Title);
+        Assert.Equal("usr_primary", cards.Cards[0].OwnerUserId);
+        Assert.Equal("primary", cards.Cards[0].OwnerRole);
+        Assert.Equal(10, cards.Cards[0].DueDay);
+        Assert.Equal(new DateOnly(2026, 6, 10), cards.Cards[0].NextDueDate);
+        Assert.Equal("card_partner", cards.Cards[1].Id);
+        Assert.Equal("usr_partner", cards.Cards[1].OwnerUserId);
+        Assert.Equal("partner", cards.Cards[1].OwnerRole);
+        Assert.Equal(new DateOnly(2026, 5, 25), cards.Cards[1].NextDueDate);
+        Assert.Contains("2 cartao", cards.SummaryText);
+    }
+
+    [Fact]
     public async Task Purchase_simulation_credit_card_uses_closing_and_due_dates()
     {
         using var factory = new TestCopilotFactory();
@@ -202,6 +256,7 @@ public sealed class CopilotApiTests
 
         Assert.Contains("\"operationId\": \"GetMonthSummary\"", json);
         Assert.Contains("\"operationId\": \"GetNextThreeMonths\"", json);
+        Assert.Contains("\"operationId\": \"ListAvailableCards\"", json);
         Assert.Contains("\"operationId\": \"SimulatePurchase\"", json);
     }
 

@@ -477,6 +477,43 @@ public sealed class CopilotCosmosRepository : ICopilotReadRepository, ICopilotRe
         }
     }
 
+    public async Task<IReadOnlyList<CardDocument>> ListActiveCardsAsync(string userId, CancellationToken cancellationToken)
+    {
+        var query = new QueryDefinition(
+                """
+                SELECT *
+                FROM c
+                WHERE c.docType = "card"
+                  AND c.userId = @userId
+                  AND (NOT IS_DEFINED(c.deletedAt) OR IS_NULL(c.deletedAt))
+                """)
+            .WithParameter("@userId", userId);
+
+        try
+        {
+            using var iterator = _cards.GetItemQueryIterator<CardDocument>(
+                query,
+                requestOptions: new QueryRequestOptions
+                {
+                    PartitionKey = new PartitionKey(userId),
+                    MaxItemCount = 100
+                });
+
+            var results = new List<CardDocument>();
+            while (iterator.HasMoreResults)
+            {
+                var page = await iterator.ReadNextAsync(cancellationToken);
+                results.AddRange(page.Resource);
+            }
+
+            return results;
+        }
+        catch (CosmosException ex)
+        {
+            throw Dependency(ex);
+        }
+    }
+
     private async Task<DateTimeOffset?> GetMonthMaxUpdatedAtAsync(
         string userId,
         YearMonth yearMonth,

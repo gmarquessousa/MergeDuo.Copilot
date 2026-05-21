@@ -68,6 +68,23 @@ public sealed record CopilotNextThreeMonthsResponse(
     [property: JsonPropertyName("computedAt")] DateTimeOffset ComputedAt,
     [property: JsonPropertyName("summaryText")] string SummaryText);
 
+public sealed record CopilotCardResponse(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("ownerUserId")] string OwnerUserId,
+    [property: JsonPropertyName("ownerRole")] string OwnerRole,
+    [property: JsonPropertyName("closingDay")] int ClosingDay,
+    [property: JsonPropertyName("dueDay")] int DueDay,
+    [property: JsonPropertyName("nextDueDate")] DateOnly NextDueDate,
+    [property: JsonPropertyName("currency")] string Currency);
+
+public sealed record CopilotCardsResponse(
+    [property: JsonPropertyName("scope")] string Scope,
+    [property: JsonPropertyName("owners")] IReadOnlyList<CopilotOwnerResponse> Owners,
+    [property: JsonPropertyName("cards")] IReadOnlyList<CopilotCardResponse> Cards,
+    [property: JsonPropertyName("computedAt")] DateTimeOffset ComputedAt,
+    [property: JsonPropertyName("summaryText")] string SummaryText);
+
 public sealed class PurchaseSimulationRequest
 {
     [JsonPropertyName("description")]

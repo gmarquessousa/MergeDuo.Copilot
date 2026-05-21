@@ -256,6 +256,18 @@ public sealed class InMemoryCopilotRepository(string configuredUserId) : ICopilo
         }
     }
 
+    public Task<IReadOnlyList<CardDocument>> ListActiveCardsAsync(string userId, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            IReadOnlyList<CardDocument> result = _cards.Values
+                .Where(x => x.UserId == userId && x.DeletedAt is null)
+                .Select(Clone)
+                .ToArray();
+            return Task.FromResult(result);
+        }
+    }
+
     private static SourceWatermarkDocument Watermark(IEnumerable<TransactionProjection> transactions)
     {
         var items = transactions.ToArray();
@@ -341,8 +353,10 @@ public sealed class InMemoryCopilotRepository(string configuredUserId) : ICopilo
             Id = card.Id,
             DocType = card.DocType,
             UserId = card.UserId,
+            Title = card.Title,
             ClosingDay = card.ClosingDay,
             DueDay = card.DueDay,
+            Currency = card.Currency,
             DeletedAt = card.DeletedAt
         };
 
